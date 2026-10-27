@@ -633,6 +633,8 @@ const ICON = {
   multi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M15 3h6v6M3 15v6h6"/></svg>',
   rotate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  mirrorH: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18" stroke-dasharray="2 3"/><path d="M9 6 3 18h6zM15 6l6 12h-6z"/></svg>',
+  mirrorV: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18" stroke-dasharray="2 3"/><path d="M6 9 18 3v6zM6 15l12 6v-6z"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
 };
 
@@ -803,8 +805,8 @@ function deskPanelHTML(){
         <div class="row2"><input class="input mono" id="deskNum" value="${esc(d.number)}" style="flex:1"><button class="btn small" data-act="saveNum">Save</button></div></div>
       <div class="stack"><label class="l" for="deskShape">Shape</label>
         <select class="input" id="deskShape">${Object.entries(SHAPES).map(([k,v]) => `<option value="${k}" ${k === d.shape ? 'selected' : ''}>${v.label}</option>`).join('')}</select></div>
-      <div class="row2"><button class="btn small" data-act="rotate">${ICON.rotate}Rotate</button><button class="btn small" data-act="selectConnected">Select its whole row</button></div>
-      <span class="sm muted">Drag the desk to move it, or use the arrow keys. “Select its whole row” picks every desk touching this one so you can move them together. Press Delete to remove it.</span>
+      <div class="row2"><button class="btn small" data-act="rotate">${ICON.rotate}Rotate</button><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button><button class="btn small" data-act="selectConnected">Select its whole row</button></div>
+      <span class="sm muted">Drag the desk to move it, or use the arrow keys. “Select its whole row” picks every desk touching this one so you can move them together. Ctrl+C and Ctrl+V copy and paste it where your mouse is. Press Delete to remove it.</span>
       ${state.confirm === 'deleteDesk'
         ? `<div class="confirm"><span>Delete desk ${esc(d.number)}?${p ? ` ${esc(p.name)} will be left without a desk.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete desk</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
         : `<div><button class="btn small danger" data-act="deleteSel">Delete desk</button></div>`}
@@ -848,6 +850,9 @@ function groupPanelHTML(){
         </div>
         <span class="sm muted" style="flex:1;min-width:140px">Or drag any selected desk on the map. Desks can't be dropped on top of others. Press Delete to remove them.</span>
       </div></div>
+    <div class="box"><h3>Copy and flip</h3>
+      <div class="row2"><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button><button class="btn small" data-act="mirrorH">${ICON.mirrorH}Flip left–right</button><button class="btn small" data-act="mirrorV">${ICON.mirrorV}Flip top–bottom</button></div>
+      <span class="sm muted">Copies are free desks with new numbers. Ctrl+C and Ctrl+V copy and paste them where your mouse is. Flipping keeps each desk's number and person.</span></div>
     <div class="box"><h3>Renumber these desks</h3>
       <div class="grid2">
         <div class="stack"><label class="l" for="grpStart">Start at</label><input class="input mono" id="grpStart" value="${esc(ds[0]?.number || nextDeskNumber())}"></div>
@@ -1202,6 +1207,71 @@ function deleteSelection(){
   state.sel = new Set(); state.confirm = null; render(true);
   toast(one ? `Deleted desk ${one}` : `Deleted ${n} desks`);
 }
+/* copy, paste, duplicate and flip */
+let clipboard = null;   // { w, h, x0, y0, items: [{ shape, rot, dx, dy }] }, offsets from the copied block's top-left
+let pointerCell = null; // where the mouse last was over the map, so a paste lands there
+function selectedDesks(){ return [...state.sel].map(id => state.desks.get(id)).filter(Boolean); }
+function boundsOf(list){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const d of list) { const s = SHAPES[d.shape] || SHAPES.h; x0 = Math.min(x0, d.x); y0 = Math.min(y0, d.y); x1 = Math.max(x1, d.x + s.w); y1 = Math.max(y1, d.y + s.h); }
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
+}
+function clipOf(list){
+  const b = boundsOf(list);
+  return { w: b.w, h: b.h, x0: b.x0, y0: b.y0, items: list.map(d => ({ shape: d.shape, rot: d.rot || 0, dx: d.x - b.x0, dy: d.y - b.y0 })) };
+}
+function copySelection(){
+  const list = selectedDesks(); if (!list.length) return;
+  clipboard = clipOf(list);
+  toast(`Copied ${list.length === 1 ? 'desk ' + list[0].number : list.length + ' desks'}. Press Ctrl+V to paste where your mouse is.`);
+}
+// the free spot nearest to `want` where the whole block fits, otherwise the first free spot on the map
+function pasteClip(clip, want){
+  const occ = occupancy();
+  const fits = (x, y) => x >= 0 && y >= 0 && clip.items.every(it => !cellsOf(it.shape, it.rot, x + it.dx, y + it.dy).some(c => occ.has(c)));
+  let spot = null;
+  for (let r = 0; r <= 30 && !spot; r++) {
+    let best = Infinity;
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = want.x + dx, y = want.y + dy, dist = dx * dx + dy * dy;
+      if (dist < best && fits(x, y)) { best = dist; spot = { x, y }; }
+    }
+  }
+  spot = spot || findBox(clip.w, clip.h);
+  const placed = clip.items.map(it => ({ shape: it.shape, rot: it.rot, x: spot.x + it.dx, y: spot.y + it.dy })).sort((a, b) => (a.y - b.y) || (a.x - b.x));
+  const nums = numberSeq(nextDeskNumber(), placed.length);
+  const ids = placed.map((p, i) => { const d = { id: uid('d'), number: nums[i], ...p, personId: null }; setRec('desks', d); return d.id; });
+  state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  render(true); scrollToCell(spot.x, spot.y);
+  toast(ids.length === 1 ? `Added desk ${nums[0]}` : `Added ${ids.length} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the group.`);
+}
+// copies without a mouse position go just to the right of the original
+const besideOf = c => ({ x: c.x0 + c.w + 1, y: c.y0 });
+function pasteClipboard(){
+  if (!clipboard) { toast('Select desks and press Ctrl+C to copy them first'); return; }
+  pasteClip(clipboard, pointerCell ? { x: Math.round(pointerCell.x - clipboard.w / 2), y: Math.round(pointerCell.y - clipboard.h / 2) } : besideOf(clipboard));
+}
+function duplicateSelection(){
+  const list = selectedDesks(); if (!list.length) return;
+  const clip = clipOf(list);
+  pasteClip(clip, besideOf(clip));
+}
+// corner desks turn to face the other way; h/v desks look the same flipped
+const FLIP = { h: { 0: 90, 90: 0, 180: 270, 270: 180 }, v: { 0: 270, 270: 0, 90: 180, 180: 90 } };
+function mirrorSelection(axis){
+  const list = selectedDesks(); if (!list.length) return;
+  const b = boundsOf(list), occ = occupancy(state.sel);
+  const next = list.map(d => {
+    const s = SHAPES[d.shape] || SHAPES.h, rot = d.rot || 0;
+    return { id: d.id, shape: d.shape, rot: d.shape === 'corner' ? FLIP[axis][rot] : rot,
+      x: axis === 'h' ? b.x0 + b.x1 - d.x - s.w : d.x, y: axis === 'v' ? b.y0 + b.y1 - d.y - s.h : d.y };
+  });
+  if (next.some(n => cellsOf(n.shape, n.rot, n.x, n.y).some(c => occ.has(c)))) { toast("Can't flip: it would overlap a desk that isn't selected"); return; }
+  for (const n of next) patchRec('desks', n.id, { rot: n.rot, x: n.x, y: n.y });
+  render(true);
+  toast(axis === 'h' ? 'Flipped left to right' : 'Flipped top to bottom');
+}
 function deleteSelectedZone(){
   const z = state.zones.get(state.selectedZone);
   delRec('zones', state.selectedZone); state.selectedZone = null; state.confirm = null; render(true);
@@ -1331,6 +1401,9 @@ document.addEventListener('click', e => {
     }
     case 'deleteZone': state.confirm = 'deleteZone'; renderPanel(true); break;
     case 'deleteZoneYes': deleteSelectedZone(); break;
+    case 'duplicate': duplicateSelection(); break;
+    case 'mirrorH': mirrorSelection('h'); break;
+    case 'mirrorV': mirrorSelection('v'); break;
     case 'backToList': state.selectedPerson = null; state.confirm = null; renderPanel(true); break;
     case 'showDesk': selectDesk(b.dataset.id, { scrollMap: true }); break;
     case 'unseat': seat(b.dataset.id, null); break;
@@ -1645,6 +1718,20 @@ document.addEventListener('keydown', e => {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
   if (state.editing || state.panelMode) return;
   if (state.sel.size || state.selectedZone) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; render(true); }
+});
+planEl.addEventListener('pointermove', e => { pointerCell = cellFromEvent(e); });
+planEl.addEventListener('pointerleave', () => { pointerCell = null; });
+// Ctrl/Cmd + C, V, D: copy, paste (at the mouse) and duplicate desks while arranging
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || !state.arrange || state.readOnly || drag || placing) return;
+  const k = e.key.toLowerCase();
+  if (k !== 'c' && k !== 'v' && k !== 'd') return;
+  if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
+  const a = document.activeElement;
+  if (/INPUT|TEXTAREA|SELECT/.test(a?.tagName || '') || a?.isContentEditable) return;
+  if (k === 'c') { if (!state.sel.size || String(getSelection())) return; e.preventDefault(); copySelection(); }
+  else if (k === 'v') { e.preventDefault(); pasteClipboard(); }
+  else if (state.sel.size) { e.preventDefault(); duplicateSelection(); }
 });
 // Delete / Supr (or Backspace) removes the selected desks or area while arranging.
 // An area or one free desk goes straight away (an area's desks stay put); several desks, or anyone seated,
