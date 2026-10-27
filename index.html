@@ -267,6 +267,15 @@ textarea.input{min-height:76px;resize:vertical}
 .ov{padding:10px;border:1px solid var(--line);border-radius:8px}
 .ov b{display:block;font-family:var(--f-display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
 .ov span{font-size:12px;color:var(--muted)}
+button.ov{background:transparent;text-align:left;cursor:pointer;font:inherit;color:inherit}
+button.ov:hover{border-color:var(--line-strong);background:var(--accent-soft)}
+.ov.warn b{color:var(--warn)}
+.fold > summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;padding:6px 0;user-select:none}
+.fold > summary::-webkit-details-marker{display:none}
+.fold > summary::before{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;margin:0 3px}
+.fold[open] > summary::before{transform:rotate(45deg)}
+.fold > summary:hover .eyebrow{color:var(--ink)}
+.fold > .btn{margin-top:6px}
 .teamlist{display:flex;flex-direction:column;gap:4px}
 .teamlist .chipbtn{justify-content:flex-start;border-radius:7px;width:100%;padding:6px 9px}
 .teamlist .chipbtn .n{margin-left:auto}
@@ -434,7 +443,7 @@ const state = {
   desks: new Map(), people: new Map(), zones: new Map(), settings: new Map(), fieldsDraft: null,
   loaded: false, local: false, readOnly: false,
   sel: new Set(), selectedZone: null, selectedPerson: null,
-  tab: 'desk', arrange: false, multi: false, query: '', peopleFilter: 'all',
+  tab: 'desk', arrange: false, multi: false, query: '', peopleFilter: 'all', noDeskOpen: false,
   zoom: window.innerWidth < 880 ? 0.6 : 1,
   editing: null,      // {id, deskId}: person form
   panelMode: null,    // 'addRow'
@@ -455,10 +464,17 @@ const deskEl = id => planEl.querySelector(`.desk[data-id="${CSS.escape(id)}"]`);
 function desksArr(){ return [...state.desks.values()]; }
 function peopleArr(){ return [...state.people.values()].sort((a,b) => (a.name||'').localeCompare(b.name||'')); }
 function single(){ return state.sel.size === 1 ? state.sel.values().next().value : null; }
+// someone can sit at several desks: seatIndex gives each person's first desk (by number), seatsOf all of them
 function seatIndex(){
   const m = new Map();
-  for (const d of state.desks.values()) if (d.personId && state.people.has(d.personId)) m.set(d.personId, d);
+  for (const d of desksArr().sort(byNumber)) if (d.personId && state.people.has(d.personId) && !m.has(d.personId)) m.set(d.personId, d);
   return m;
+}
+function seatsOf(pid){ return desksArr().filter(d => d.personId === pid).sort(byNumber); }
+function deskList(ds){ return ds.map(d => d.number).join(', '); }
+function deskPill(ds){
+  if (!ds.length) return '';
+  return ds.length === 1 ? `<span class="pill mono">Desk ${esc(ds[0].number)}</span>` : `<span class="pill mono" title="Desks ${esc(deskList(ds))}">Desk ${esc(ds[0].number)} +${ds.length - 1}</span>`;
 }
 function teams(){
   const m = new Map();
@@ -616,19 +632,21 @@ function undoRedo(isRedo){
 }
 
 /* ---------- seat operations ---------- */
-function seat(deskId, personId){
+// add: give the person this desk as well, instead of moving them here from their other desks
+function seat(deskId, personId, add){
   const d = state.desks.get(deskId); if (!d) return;
   if (personId) {
-    const from = seatIndex().get(personId);
+    const p = state.people.get(personId), name = p?.name || 'Person', wasWfh = !!p?.wfh;
+    const others = seatsOf(personId).filter(o => o.id !== deskId);
     const prev = d.personId && d.personId !== personId ? state.people.get(d.personId) : null;
-    if (from && from.id !== deskId) patchRec('desks', from.id, { personId: null });
-    const name = state.people.get(personId)?.name || 'Person';
-    const wasWfh = !!state.people.get(personId)?.wfh;
+    if (!add) for (const o of others) patchRec('desks', o.id, { personId: null });
     patchRec('desks', deskId, { personId });
     clearWaiting(personId);
     if (wasWfh) setWfh(personId, false);
-    toast((from && from.id !== deskId ? `Moved ${name} from desk ${from.number} to desk ${d.number}.` : `${name} is now at desk ${d.number}.`)
-      + (wasWfh ? ' They now work from the office.' : '') + (prev ? ` ${prev.name} no longer has a desk.` : ''));
+    const msg = !others.length ? `${name} is now at desk ${d.number}.`
+      : add ? `${name} now also has desk ${d.number} (desks ${deskList([...others, d].sort(byNumber))}).`
+      : `Moved ${name} from desk${others.length > 1 ? 's' : ''} ${deskList(others)} to desk ${d.number}.`;
+    toast(msg + (wasWfh ? ' They now work from the office.' : '') + (prev ? ` ${prev.name} no longer has ${seatsOf(prev.id).length ? 'that' : 'a'} desk.` : ''));
   } else {
     patchRec('desks', deskId, { personId: null });
     toast(`Desk ${d.number} is now free`);
@@ -644,39 +662,42 @@ function swapSeats(a, b){
   toast(`Swapped desks ${da.number} and ${dbk.number}`);
   render(true);
 }
-// People imported with a desk number that isn't on the map yet keep it as pendingDesk.
-// Once a desk with that number exists they're seated there, if it's free; seating them anywhere by hand forgets it.
-function clearWaiting(pid){
-  const p = state.people.get(pid);
-  if (!p || !p.pendingDesk) return;
+// pendingDesk holds desk numbers ("12, 14") someone should sit at that aren't on the map: from an import,
+// or a desk that was deleted under them. When a desk with one of those numbers exists they're seated there
+// if it's free; seating them anywhere by hand forgets the rest.
+function pendingOf(p){ return String(p?.pendingDesk || '').split(/\s*,\s*/).filter(Boolean); }
+function setPending(pid, nums){
+  const p = state.people.get(pid); if (!p) return;
+  const v = [...new Set(nums)].join(', ');
+  if ((p.pendingDesk || '') === v) return;
   const { pendingDesk, ...rest } = p;
-  setRec('people', rest);
+  setRec('people', v ? { ...rest, pendingDesk: v } : rest);
 }
-// People who work from home (wfh) don't need a desk. Marking someone WFH frees their desk and
-// drops any desk number they were waiting for; seating them anywhere makes them office workers again.
+function clearWaiting(pid){ setPending(pid, []); }
+// People who work from home (wfh) don't need a desk. Marking someone WFH frees their desks and
+// drops any desk numbers they were waiting for; seating them anywhere makes them office workers again.
 function setWfh(pid, on){
   const p = state.people.get(pid); if (!p) return null;
-  const at = seatIndex().get(pid);
-  if (!!p.wfh === on && !(on && (at || p.pendingDesk))) return null;
-  if (on && at) patchRec('desks', at.id, { personId: null });
+  const seats = seatsOf(pid);
+  if (!!p.wfh === on && !(on && (seats.length || p.pendingDesk))) return null;
+  if (on) for (const d of seats) patchRec('desks', d.id, { personId: null });
   const { wfh, pendingDesk, ...rest } = p;
   setRec('people', on ? { ...rest, wfh: true } : pendingDesk ? { ...rest, pendingDesk } : rest);
-  return on && at ? at.number : null;
+  return on && seats.length ? seats : null;
 }
 function seatWaiting(){
   const waiting = [...state.people.values()].filter(p => p.pendingDesk && !p.wfh);
   if (!waiting.length) return [];
   const list = desksArr(), seated = [];
   for (const p of waiting) {
-    const found = findDeskByNumber(p.pendingDesk, list); if (!found) continue;
-    const d = state.desks.get(found.id);
-    if (!d.personId || !state.people.has(d.personId)) {
-      const from = seatIndex().get(p.id);
-      if (from) patchRec('desks', from.id, { personId: null });
-      patchRec('desks', d.id, { personId: p.id });
-      seated.push({ name: p.name, number: d.number });
+    const left = [];
+    for (const num of pendingOf(p)) {
+      const found = findDeskByNumber(num, list);
+      if (!found) { left.push(num); continue; }
+      const d = state.desks.get(found.id);
+      if (!d.personId || !state.people.has(d.personId)) { patchRec('desks', d.id, { personId: p.id }); seated.push({ name: p.name, number: d.number }); }
     }
-    clearWaiting(p.id);
+    setPending(p.id, left);
   }
   return seated;
 }
@@ -897,7 +918,7 @@ function personOptions(selectedId){
   const si = seatIndex();
   return peopleArr().map(p => {
     const at = si.get(p.id);
-    return `<option value="${esc(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${esc(p.name)}${at && p.id !== selectedId ? ` (at desk ${esc(at.number)})` : (!at ? (p.wfh ? ' — WFH' : ' — no desk') : '')}</option>`;
+    return `<option value="${esc(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${esc(p.name)}${at && p.id !== selectedId ? ` (at desk ${esc(deskList(seatsOf(p.id)))})` : (!at ? (p.wfh ? ' — WFH' : ' — no desk') : '')}</option>`;
   }).join('');
 }
 
@@ -926,11 +947,18 @@ function deskPanelHTML(){
 
   if (!ro) {
     html += `<div class="stack"><label class="l" for="assignSel">Seated here</label>
-      <select class="input" id="assignSel"><option value="">— Nobody (free desk) —</option>${personOptions(d.personId)}</select></div>`;
+      <select class="input" id="assignSel"><option value="">— Nobody (free desk) —</option>${personOptions(d.personId)}</select>
+      <label class="check sm" for="assignKeep"><input type="checkbox" id="assignKeep">If they already have a desk, keep it too</label></div>`;
   }
   if (p) {
+    const also = seatsOf(p.id).filter(o => o.id !== d.id);
     html += personCardHTML(p) + workModeHTML(p, false);
+    if (also.length) html += `<div class="stack"><span class="eyebrow">Also sits at</span><div class="row2">${also.map(o => `<button class="btn small" data-act="showDesk" data-id="${esc(o.id)}">Desk ${esc(o.number)}</button>`).join('')}</div></div>`;
     if (!ro) {
+      const free = desksArr().filter(o => !o.personId || !state.people.has(o.personId)).sort(byNumber);
+      html += `<div class="stack"><label class="l" for="extraSel">Give ${esc(shortName(p.name))} another desk too</label>
+        <div class="row2"><select class="input" id="extraSel" style="flex:1"><option value="">${free.length ? 'Choose a free desk…' : 'No free desks'}</option>${free.map(o => `<option value="${esc(o.id)}">Desk ${esc(o.number)}</option>`).join('')}</select>
+        <button class="btn small" data-act="addSeat" data-sel="extraSel" data-id="${esc(p.id)}" ${free.length ? '' : 'disabled'}>${ICON.plus}Add desk</button></div></div>`;
       const others = desksArr().filter(o => o.id !== d.id).sort(byNumber);
       html += `<div class="stack"><label class="l" for="swapSel">Swap seats with another desk</label>
         <div class="row2"><select class="input" id="swapSel" style="flex:1"><option value="">Choose a desk…</option>${others.map(o => { const op = o.personId ? state.people.get(o.personId) : null; return `<option value="${esc(o.id)}">Desk ${esc(o.number)} · ${op ? esc(op.name) : 'free'}</option>`; }).join('')}</select>
@@ -1012,15 +1040,21 @@ function overviewHTML(){
   const ds = desksArr(), si = seatIndex();
   const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
   const noDesk = peopleArr().filter(p => !si.has(p.id) && !p.wfh);
+  const wfh = [...state.people.values()].filter(p => p.wfh && !si.has(p.id)).length;
   const ts = teams();
   let html = `<div class="stack" style="gap:4px"><span class="eyebrow">Overview</span>
     <p style="margin:0">${state.arrange
       ? 'Drag a desk from the toolbar straight onto the map, or add whole rows. Drag desks to move them. To move many at once, drag a box around them with the mouse, or tap “Select several” and tap each one. Ctrl+Z undoes any change.'
       : 'Select a desk on the map to see who sits there and their details.'}</p></div>
-    <div class="overview"><div class="ov"><b>${ds.length}</b><span>Desks</span></div><div class="ov"><b>${seated}</b><span>Seated</span></div><div class="ov"><b>${ds.length - seated}</b><span>Free</span></div></div>`;
+    <div class="overview"><div class="ov"><b>${ds.length}</b><span>Desks</span></div><div class="ov"><b>${seated}</b><span>Seated</span></div><div class="ov"><b>${ds.length - seated}</b><span>Free</span></div>
+      <button class="ov" data-act="showPeople"><b>${state.people.size}</b><span>People</span></button>
+      <button class="ov ${noDesk.length ? 'warn' : ''}" data-act="showNoDesk" title="Office people without a desk"><b>${noDesk.length}</b><span>Need a seat</span></button>
+      <button class="ov" data-act="showWfh" title="People working from home"><b>${wfh}</b><span>WFH</span></button></div>`;
   if (noDesk.length) {
-    html += `<div class="stack"><span class="eyebrow">Without a desk · ${noDesk.length}</span><ul class="plist">${noDesk.slice(0, 8).map(personRowHTML).join('')}</ul>
-      ${noDesk.length > 8 ? `<button class="btn small ghost" data-act="showNoDesk">See all ${noDesk.length}</button>` : ''}</div>`;
+    const shown = 30;
+    html += `<details class="fold" id="noDeskFold" ${state.noDeskOpen ? 'open' : ''}><summary><span class="eyebrow">Need a seat · ${noDesk.length}</span></summary>
+      <ul class="plist">${noDesk.slice(0, shown).map(personRowHTML).join('')}</ul>
+      ${noDesk.length > shown ? `<button class="btn small ghost" data-act="showNoDesk">See all ${noDesk.length}</button>` : ''}</details>`;
   }
   if (state.zones.size) {
     html += `<div class="stack"><span class="eyebrow">Areas</span><div class="teamlist">${[...state.zones.values()].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(z => `<button class="chipbtn" data-act="openZone" data-id="${esc(z.id)}"><span class="dot" style="--tc:var(--accent)"></span>${esc(z.name || 'Area')}</button>`).join('')}</div></div>`;
@@ -1038,7 +1072,7 @@ function personRowHTML(p){
     ${grip ? `<span class="grip" aria-hidden="true">${ICON.grip}</span>` : ''}
     <span class="avatar">${esc(initials(p.name))}</span>
     <span class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${esc([p.team, p.employeeId].filter(Boolean).join(' · ') || 'No team')}</div></span>
-    ${at ? `<span class="pill mono">Desk ${esc(at.number)}</span>`
+    ${at ? deskPill(seatsOf(p.id))
       : p.wfh ? '<span class="pill wfh" title="Works from home, no desk needed">WFH</span>'
       : p.pendingDesk ? `<span class="pill warn" title="Desk ${esc(p.pendingDesk)} isn't on the map. They'll be seated there when it's added.">Waits for ${esc(p.pendingDesk)}</span>`
       : '<span class="pill warn">No desk</span>'}
@@ -1046,7 +1080,8 @@ function personRowHTML(p){
 }
 function waitingHTML(p, seated){
   if (!p.pendingDesk) return '';
-  return `<div class="row2"><span class="sm muted" style="flex:1;min-width:180px">${esc(p.name)} is waiting for desk <b class="mono">${esc(p.pendingDesk)}</b>, which isn't on the map. ${seated ? "They'll move there" : "They'll be seated there"} as soon as you add it.</span>${state.readOnly ? '' : `<button class="btn small ghost" data-act="forgetWaiting" data-id="${esc(p.id)}">Forget it</button>`}</div>`;
+  const many = pendingOf(p).length > 1;
+  return `<div class="row2"><span class="sm muted" style="flex:1;min-width:180px">${esc(p.name)} is ${seated ? 'also ' : ''}waiting for desk${many ? 's' : ''} <b class="mono">${esc(p.pendingDesk)}</b>, which ${many ? "aren't" : "isn't"} on the map. They'll be seated there as soon as you add ${many ? 'them' : 'it'}.</span>${state.readOnly ? '' : `<button class="btn small ghost" data-act="forgetWaiting" data-id="${esc(p.id)}">Forget it</button>`}</div>`;
 }
 
 function workModeHTML(p, home){
@@ -1070,13 +1105,16 @@ function peoplePanelHTML(){
     html += workModeHTML(sp, home);
     if (home) return html + `<div class="empty-note">${esc(sp.name)} works from home, so they don't need a desk.${state.readOnly ? '' : ' Switch to Office to give them one, or drag them onto a desk.'}</div>`
       + (state.readOnly ? '' : deletePersonHTML(sp));
-    html += `<div class="stack"><span class="eyebrow">Desk</span>${at
-      ? `<div class="row2"><span class="pill mono">Desk ${esc(at.number)}</span><button class="btn small" data-act="showDesk" data-id="${esc(at.id)}">Show on map</button>${state.readOnly ? '' : `<button class="btn small ghost" data-act="unseat" data-id="${esc(at.id)}">Remove from desk</button>`}</div>`
+    const seats = seatsOf(sp.id);
+    html += `<div class="stack"><span class="eyebrow">${seats.length > 1 ? `Desks · ${seats.length}` : 'Desk'}</span>${seats.length
+      ? seats.map(d => `<div class="row2"><span class="pill mono">Desk ${esc(d.number)}</span><button class="btn small" data-act="showDesk" data-id="${esc(d.id)}">Show on map</button>${state.readOnly ? '' : `<button class="btn small ghost" data-act="unseat" data-id="${esc(d.id)}">Remove from desk</button>`}</div>`).join('')
       : `<span class="pill warn" style="align-self:flex-start">No desk yet</span>`}${waitingHTML(sp, !!at)}</div>`;
     if (!state.readOnly) {
-      html += `<div class="stack"><label class="l" for="seatSel">${at ? 'Move to a free desk' : 'Seat at a free desk'}</label>
+      html += `<div class="stack"><label class="l" for="seatSel">${at ? 'Another free desk' : 'Seat at a free desk'}</label>
         <div class="row2"><select class="input" id="seatSel" style="flex:1"><option value="">${free.length ? 'Choose a desk…' : 'No free desks'}</option>${free.map(d => `<option value="${esc(d.id)}">Desk ${esc(d.number)}</option>`).join('')}</select>
-        <button class="btn small" data-act="seatPerson" data-id="${esc(sp.id)}" ${free.length ? '' : 'disabled'}>Seat</button></div></div>`;
+        ${at ? `<button class="btn small" data-act="seatPerson" data-id="${esc(sp.id)}" ${free.length ? '' : 'disabled'} title="Leave ${esc(deskList(seats))} and sit here instead">Move here</button><button class="btn small" data-act="addSeat" data-id="${esc(sp.id)}" ${free.length ? '' : 'disabled'} title="Keep ${esc(deskList(seats))} and add this desk">${ICON.plus}Add desk</button>`
+          : `<button class="btn small" data-act="seatPerson" data-id="${esc(sp.id)}" ${free.length ? '' : 'disabled'}>Seat</button>`}</div>
+        ${at ? '<span class="sm muted">Move here swaps their desk; Add desk gives them one more. You can also hold Ctrl while dragging them onto a desk to add it.</span>' : ''}</div>`;
       html += deletePersonHTML(sp);
     }
     return html;
@@ -1347,7 +1385,7 @@ function deleteSelection(){
   for (const id of state.sel) {
     // whoever sat here waits for the number, so putting a desk with it back reseats them
     const d = state.desks.get(id);
-    if (d && d.personId && state.people.has(d.personId)) { patchRec('people', d.personId, { pendingDesk: d.number }); kept++; }
+    if (d && d.personId && state.people.has(d.personId)) { setPending(d.personId, [...pendingOf(state.people.get(d.personId)), d.number]); kept++; }
     delRec('desks', id);
   }
   state.sel = new Set(); state.confirm = null; render(true);
@@ -1571,23 +1609,19 @@ document.addEventListener('click', e => {
     case 'backToList': state.selectedPerson = null; state.confirm = null; renderPanel(true); break;
     case 'showDesk': selectDesk(b.dataset.id, { scrollMap: true }); break;
     case 'unseat': seat(b.dataset.id, null); break;
+    case 'addSeat': { const v = $('#' + (b.dataset.sel || 'seatSel'))?.value; if (!v) { toast('Choose a desk first'); break; } seat(v, b.dataset.id, true); break; }
     case 'seatPerson': { const v = $('#seatSel')?.value; if (!v) { toast('Choose a desk first'); break; } seat(v, b.dataset.id); selectDesk(v, { scrollMap: true }); break; }
     case 'deletePerson': state.confirm = 'deletePerson'; renderPanel(true); break;
     case 'deletePersonYes': {
       const id = b.dataset.id; const p = state.people.get(id);
-      const at = seatIndex().get(id); if (at) patchRec('desks', at.id, { personId: null });
+      for (const d of seatsOf(id)) patchRec('desks', d.id, { personId: null });
       delRec('people', id);
       state.confirm = null; state.selectedPerson = null; render(true); toast(`Deleted ${p?.name || 'person'}`); break;
     }
     case 'tab': state.tab = b.dataset.tab; state.selectedPerson = null; renderPanel(true); break;
     case 'peopleFilter': state.peopleFilter = b.dataset.f; renderPanel(true); break;
-    case 'showNoDesk':
-      state.tab = 'people'; state.peopleFilter = 'unseated'; state.selectedPerson = null; state.editing = null; state.panelMode = null; state.confirm = null;
-      renderPanel(true);
-      if (window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
-      break;
-    case 'showWfh':
-      state.tab = 'people'; state.peopleFilter = 'wfh'; state.selectedPerson = null; state.editing = null; state.panelMode = null; state.confirm = null;
+    case 'showNoDesk': case 'showWfh': case 'showPeople':
+      state.tab = 'people'; state.peopleFilter = act === 'showNoDesk' ? 'unseated' : act === 'showWfh' ? 'wfh' : 'all'; state.selectedPerson = null; state.editing = null; state.panelMode = null; state.confirm = null;
       renderPanel(true);
       if (window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
       break;
@@ -1597,7 +1631,7 @@ document.addEventListener('click', e => {
       if (!!p.wfh === on && !(on && seatIndex().has(p.id))) break;
       const freed = setWfh(p.id, on);
       render(true);
-      toast(on ? `${p.name} works from home${freed ? `. Desk ${freed} is now free.` : '.'}` : `${p.name} works from the office. Pick a desk below or drag them onto one.`);
+      toast(on ? `${p.name} works from home${freed ? `. ${freed.length > 1 ? `Desks ${deskList(freed)} are` : `Desk ${freed[0].number} is`} now free.` : '.'}` : `${p.name} works from the office. Pick a desk below or drag them onto one.`);
       if (!on) requestAnimationFrame(() => requestAnimationFrame(() => $('#seatSel')?.focus()));
       break;
     }
@@ -1618,6 +1652,7 @@ document.addEventListener('click', e => {
     case 'clearExamplesYes': clearExamples(); break;
   }
 });
+document.addEventListener('toggle', e => { if (e.target.id === 'noDeskFold') state.noDeskOpen = e.target.open; }, true);
 document.querySelectorAll('.tabs button').forEach(t => t.addEventListener('click', () => {
   state.tab = t.dataset.tab; state.editing = null; state.panelMode = null; state.confirm = null;
   if (state.tab === 'people' && state.sel.size) state.selectedPerson = null;
@@ -1625,7 +1660,7 @@ document.querySelectorAll('.tabs button').forEach(t => t.addEventListener('click
 }));
 document.addEventListener('change', e => {
   const t = e.target, one = single();
-  if (t.id === 'assignSel' && one) seat(one, t.value || null);
+  if (t.id === 'assignSel' && one) seat(one, t.value || null, $('#assignKeep')?.checked);
   if (t.id === 'deskShape' && one) changeShape(one, t.value);
 });
 document.addEventListener('input', e => {
@@ -1817,7 +1852,7 @@ function endDrag(cancelled){
   const flush = () => { if (needsRenderAfterDrag) { needsRenderAfterDrag = false; render(); } };
   if (g.kind === 'box') {
     g.box.remove();
-    if (!g.moved) { if (!g.additive) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; render(true); } flush(); return; }
+    if (!g.moved) { if (!g.additive) { state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; if (!state.editing && !state.panelMode) state.tab = 'desk'; render(true); } flush(); return; }
     needsRenderAfterDrag = false;
     selectSet(g.hit || g.base);
     if ((g.hit || new Set()).size > 1) toast(`Selected ${g.hit.size} desks. Drag any of them to move the group.`);
@@ -1913,6 +1948,7 @@ planEl.addEventListener('click', e => {
   const el = e.target.closest('.desk');
   if (el) selectDesk(el.dataset.id, { scrollPanel: true });
   else if (zl) { state.selectedZone = zl.dataset.zid; state.sel = new Set(); state.tab = 'desk'; render(true); }
+  else if (!state.editing && !state.panelMode) { state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; state.tab = 'desk'; render(true); }
 });
 planEl.addEventListener('keydown', e => {
   const el = e.target.closest('.desk'); if (!el) return;
@@ -2017,7 +2053,7 @@ document.addEventListener('pointermove', e => {
     p.row.classList.add('lifted');
     p.raf = requestAnimationFrame(pdragScroll);
   }
-  p.x = e.clientX; p.y = e.clientY;
+  p.x = e.clientX; p.y = e.clientY; p.add = e.ctrlKey || e.metaKey;
   p.ghost.style.transform = `translate(${p.x + 14}px, ${p.y + 14}px)`;
   pdragTarget();
 });
@@ -2026,14 +2062,16 @@ function pdragTarget(){
   const hit = document.elementFromPoint(p.x, p.y)?.closest('.desk');
   const id = hit && planEl.contains(hit) ? hit.dataset.id : null;
   const el = id ? deskEl(id) : null;
-  if (id === p.target && (!el || el.classList.contains('droptarget'))) return;
+  if (id === p.target && p.add === p.shownAdd && (!el || el.classList.contains('droptarget'))) return;
+  p.shownAdd = p.add;
   planEl.querySelectorAll('.desk.droptarget').forEach(n => n.classList.remove('droptarget'));
   p.target = id;
   el?.classList.add('droptarget');
   const d = id ? state.desks.get(id) : null;
   const who = d && d.personId && d.personId !== p.id ? state.people.get(d.personId) : null;
   p.ghost.classList.toggle('on', !!d);
-  p.ghost.querySelector('.to').textContent = !d ? 'Drop on a desk' : d.personId === p.id ? `Already at desk ${d.number}` : `Desk ${d.number}` + (who ? ` · replaces ${shortName(who.name)}` : '');
+  const extra = p.add && seatsOf(p.id).some(o => o.id !== id);
+  p.ghost.querySelector('.to').textContent = !d ? (p.add ? 'Drop on a desk to add it' : 'Drop on a desk · Ctrl adds an extra desk') : d.personId === p.id ? `Already at desk ${d.number}` : `${extra ? '+ ' : ''}Desk ${d.number}${extra ? ' as an extra desk' : ''}` + (who ? ` · replaces ${shortName(who.name)}` : '');
 }
 // scroll the map while the pointer is near its edges (once it has been inside), and the page on phones
 function pdragScroll(){
@@ -2063,10 +2101,13 @@ function endPersonDrag(cancelled){
   swallowRowClick = true; setTimeout(() => { swallowRowClick = false; }, 0);
   const d = !cancelled && p.target ? state.desks.get(p.target) : null;
   needsRenderAfterDrag = false;
-  if (d && d.personId !== p.id && state.people.has(p.id)) seat(d.id, p.id);
+  if (d && d.personId !== p.id && state.people.has(p.id)) seat(d.id, p.id, p.add);
   else render();
 }
-document.addEventListener('pointerup', e => { if (pdrag && e.pointerId === pdrag.pointerId) endPersonDrag(false); });
+document.addEventListener('pointerup', e => { if (pdrag && e.pointerId === pdrag.pointerId) { pdrag.add = e.ctrlKey || e.metaKey; endPersonDrag(false); } });
+// pressing or releasing Ctrl mid-drag switches between moving and adding an extra desk
+document.addEventListener('keydown', e => { if (pdrag?.moved && (e.key === 'Control' || e.key === 'Meta')) { pdrag.add = true; pdragTarget(); } });
+document.addEventListener('keyup', e => { if (pdrag?.moved && (e.key === 'Control' || e.key === 'Meta')) { pdrag.add = false; pdragTarget(); } });
 document.addEventListener('pointercancel', e => { if (pdrag && e.pointerId === pdrag.pointerId) endPersonDrag(true); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && pdrag) endPersonDrag(true); });
 // a drag that ends back over its own row would otherwise open that person
@@ -2107,7 +2148,7 @@ function renderImport(){
       </div>
       <div class="helpgrid">
         <div class="box"><h3>People sheet</h3>
-          <p>One row per person with a name column (or First name + Last name). Other columns are matched to your fields by their titles, and you can change any match before importing. Desk (or Table #) is the desk number: people are seated there, or as soon as that desk is added to the map. WFH or NA marks someone who works from home and doesn't need a desk.</p>
+          <p>One row per person with a name column (or First name + Last name). Other columns are matched to your fields by their titles, and you can change any match before importing. Desk (or Table #) is the desk number: people are seated there, or as soon as that desk is added to the map. Separate several desks with commas (12, 14). WFH or NA marks someone who works from home and doesn't need a desk.</p>
           <p>People already on the map are recognised by the fields ticked “Recognise people by this” (by default Employee ID, Customer ID, email or name) and updated instead of duplicated. Manage them with People → Fields.</p>
           ${downloads ? '<div><button class="btn small" data-imp="tplPeople">People template</button></div>' : ''}</div>
         <div class="box"><h3>Desk layout sheet</h3>
@@ -2156,7 +2197,7 @@ function renderImport(){
     const noName = !Q.mapping.name && !Q.mapping.firstName && !Q.mapping.lastName;
     secs.push(`<div class="impsec"><h3>People <span class="muted sm">· sheet “${esc(Q.sheet)}”</span></h3>
       <div class="sumrow"><span class="pill ok">${Q.created} new</span><span class="pill free">${Q.updated} updated</span><span class="pill mono">${Q.seated} seated</span>${Q.wfh ? `<span class="pill wfh">${Q.wfh} WFH</span>` : ''}${Q.missingDesks.length ? `<span class="pill warn">${Q.missingDesks.length} desk numbers not found</span>` : ''}${Q.skipped ? `<span class="pill warn">${Q.skipped} without a name skipped</span>` : ''}</div>
-      ${Q.missingDesks.length ? `<p class="sm muted">Not on the map: <span class="mono">${esc(Q.missingDesks.slice(0, 12).join(', '))}${Q.missingDesks.length > 12 ? '…' : ''}</span>. Those people will be imported without a desk for now and seated automatically as soon as you add a desk with their number.</p>` : ''}
+      ${Q.missingDesks.length ? `<p class="sm muted">Not on the map: <span class="mono">${esc(Q.missingDesks.slice(0, 12).join(', '))}${Q.missingDesks.length > 12 ? '…' : ''}</span>. Those people wait for them: they're seated automatically as soon as you add a desk with their number. The list wins, so anyone listed at other desks than they have now gives up the old ones.</p>` : ''}
       ${Q.wfh ? `<p class="sm muted">${Q.wfh} ${Q.wfh === 1 ? 'person is' : 'people are'} marked WFH or NA in the desk column. They're set to work from home, so they don't need a desk, and anyone among them who has one gives it up.</p>` : ''}
       ${noName ? `<div class="confirm"><span>Choose which column holds each person's name. People without a name can't be imported.</span></div>` : ''}
       <div class="stack"><span class="eyebrow">Where each column goes</span>
@@ -2233,7 +2274,8 @@ async function readFile(file){
   const st = $('#impStatus'); if (st) st.textContent = 'Reading ' + file.name + '…';
   try {
     const XLSX = await loadXLSX();
-    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    // CSV cells are read as typed: otherwise "12/14" in a desk column turns into a date and IDs lose leading zeros
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true, raw: /\.csv$/i.test(file.name) });
     const found = { people: null, layout: null, areas: null }; const ignored = [];
     for (const name of wb.SheetNames) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
@@ -2350,13 +2392,14 @@ function planAll(found){
       for (const f of matchFs) { const v = norm(data[f.k]); const hit = v && idx.get(f.k).get(v); if (hit) { existing = hit; break; } }
       const cell = m.desk ? String(r[m.desk] ?? '').trim() : '';
       const kind = deskCellKind(cell);
-      const deskNumber = kind === 'desk' ? cell : '';
-      const desk = deskNumber ? findDeskByNumber(deskNumber, list) : null;
-      if (deskNumber && !desk) missing.add(deskNumber);
-      if (desk) seated++;
+      // one cell can name several desks: "12, 14" or "12 / 14"
+      const numbers = kind === 'desk' ? cell.split(/\s*[,;\/&+]\s*|\s+(?:y|and)\s+/i).map(x => x.trim()).filter(x => deskCellKind(x) === 'desk') : [];
+      const deskIds = [], waits = [];
+      for (const n of numbers) { const d = findDeskByNumber(n, list); if (d) { if (!deskIds.includes(d.id)) deskIds.push(d.id); } else { waits.push(n); missing.add(n); } }
+      if (deskIds.length) seated++;
       if (kind === 'wfh') wfh++;
       existing ? updated++ : created++;
-      items.push({ data, existing, deskNumber: kind === 'wfh' ? cell : deskNumber, wfh: kind === 'wfh', deskId: desk ? desk.id : null });
+      items.push({ data, existing, deskNumber: kind === 'wfh' ? cell : numbers.join(', '), wfh: kind === 'wfh', numbers, deskIds, waits });
     }
     plan.people = { sheet: found.people.sheet, headers: found.people.headers, rows: found.people.rows, colMap: found.people.colMap, autoMap: found.people.autoMap, dups: found.people.dups || {}, mapping: m, items, skipped, created, updated, seated, wfh, missingDesks: [...missing] };
   }
@@ -2405,13 +2448,14 @@ function runImport(){
       setRec('people', p); it.pid = p.id;
     }
     for (const it of P.people.items) {
-      if (it.wfh) setWfh(it.pid, true);
-      else if (it.deskId && state.desks.has(it.deskId)) {
-        const from = seatIndex().get(it.pid);
-        if (from && from.id !== it.deskId) patchRec('desks', from.id, { personId: null });
-        patchRec('desks', it.deskId, { personId: it.pid });
-        clearWaiting(it.pid); setWfh(it.pid, false);
-      } else if (it.deskNumber) { setWfh(it.pid, false); patchRec('people', it.pid, { pendingDesk: it.deskNumber }); }
+      if (it.wfh) { setWfh(it.pid, true); continue; }
+      if (!it.numbers.length) continue;
+      // the list wins: the person ends up at exactly the desks it names, and waits for the ones not on the map yet
+      setWfh(it.pid, false);
+      const want = new Set(it.deskIds.filter(id => state.desks.has(id)));
+      for (const d of seatsOf(it.pid)) if (!want.has(d.id)) patchRec('desks', d.id, { personId: null });
+      for (const id of want) if (state.desks.get(id).personId !== it.pid) patchRec('desks', id, { personId: it.pid });
+      setPending(it.pid, it.waits);
     }
     done.push(`${P.people.items.length} people`);
   }
@@ -2433,11 +2477,10 @@ async function saveFile(filename, data){
 async function exportXlsx(){
   try {
     const XLSX = await loadXLSX();
-    const si = seatIndex();
     const peopleRows = peopleArr().map(p => {
       const o = {};
       for (const f of fields()) o[f.label] = p[f.k] || '';
-      o['Desk'] = si.get(p.id)?.number || (p.wfh ? 'WFH' : p.pendingDesk) || '';
+      o['Desk'] = p.wfh ? 'WFH' : [...seatsOf(p.id).map(d => d.number), ...pendingOf(p)].join(', ');
       return o;
     });
     const deskRows = desksArr().sort(byNumber).map(d => {
