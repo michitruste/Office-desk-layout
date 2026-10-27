@@ -896,6 +896,38 @@ function undoRedo(isRedo){
   toast(isRedo ? 'Redone' : 'Undone. Press Ctrl+Y to redo.');
 }
 
+/* ---------- room to grow on the left and top ---------- */
+// The sheet grows right and down by itself. So it can grow left and up too, while arranging everything stays at
+// least ROOM squares from the top-left corner: when something goes closer, the whole map shifts right or down
+// and the view scrolls with it, so nothing seems to move. The undo history shifts too, so undo still puts
+// things back where they were. Leaving Arrange mode trims a wider margin back to ROOM.
+const ROOM = 6;
+let viewShift = null; // squares the view still has to scroll to keep up with a shift
+function shiftAll(dx, dy){
+  const mv = (col, r) => col === 'desks' ? { ...r, x: r.x + dx, y: r.y + dy } : col === 'zones' ? shiftZone(r, dx, dy) : col === 'fixtures' ? shiftFixture(r, dx, dy) : r;
+  for (const col of ['desks', 'zones', 'fixtures']) { const m = COLS[col](); for (const [id, r] of m) m.set(id, mv(col, r)); }
+  const fix = e => { if (e.rec) e.rec = mv(e.col, e.rec); };
+  undoLog.undo.forEach(s => s.forEach(fix)); undoLog.redo.forEach(s => s.forEach(fix)); undoLog.step?.forEach(fix);
+  if (clipboard) { clipboard.x0 += dx; clipboard.y0 += dy; }
+  if (adraft) adraft.pts = adraft.pts.map(q => [q[0] + dx, q[1] + dy]);
+  if (pointerCell) pointerCell = { x: pointerCell.x + dx, y: pointerCell.y + dy };
+  viewShift = { dx: (viewShift?.dx || 0) + dx, dy: (viewShift?.dy || 0) + dy };
+  sync();
+}
+function makeRoom(trim){
+  if (state.readOnly || (!state.desks.size && !state.zones.size && !state.fixtures.size)) return;
+  const { minX, minY } = extent(), need = v => v < ROOM || (trim && v > ROOM) ? ROOM - v : 0;
+  const dx = need(minX), dy = need(minY);
+  if (dx || dy) shiftAll(dx, dy);
+}
+function keepView(){
+  const v = viewShift; viewShift = null;
+  if (!v) return;
+  const sc = $('#scroll'), u = U_BASE * state.zoom, ownV = sc.scrollHeight > sc.clientHeight + 1; // narrow layouts scroll the page instead
+  sc.scrollLeft += v.dx * u;
+  if (ownV) sc.scrollTop += v.dy * u; else window.scrollBy(0, v.dy * u);
+}
+
 /* ---------- seat operations ---------- */
 // add: give the person this desk as well, instead of moving them here from their other desks
 function seat(deskId, personId, add){
@@ -987,7 +1019,9 @@ function renderNow(){
   for (const id of [...state.selRoom]) if (!roomRec(id)) state.selRoom.delete(id);
   if (state.selectedPerson && !state.people.has(state.selectedPerson)) state.selectedPerson = null;
   const f = forcePanelNext; forcePanelNext = false;
+  if (state.arrange && state.loaded) makeRoom(false);
   renderStats(); renderNotices(); renderTools(); renderPlan(); renderLegend(); renderPanel(f);
+  keepView();
   if (state.loaded && !state.didFit) {
     state.didFit = true;
     const { maxX, maxY } = extent();
@@ -2256,7 +2290,7 @@ function setQuery(v){ qEl.value = v; state.query = v; renderPlan(); if (state.ta
 function setArrange(on){
   if (state.readOnly) on = false;
   state.arrange = on; state.confirm = null;
-  if (!on) { state.multi = false; state.panelMode = null; state.tool = null; adraft = null; state.selectedFixture = null; state.selRoom = new Set(); if (state.sel.size > 1) state.sel = new Set(); }
+  if (!on) { state.multi = false; state.panelMode = null; state.tool = null; adraft = null; state.selectedFixture = null; state.selRoom = new Set(); if (state.sel.size > 1) state.sel = new Set(); if (state.loaded) makeRoom(true); }
   const b = $('#arrangeBtn'); b.setAttribute('aria-pressed', on); b.querySelector('span').textContent = on ? 'Done arranging' : 'Arrange desks';
   render(true);
 }

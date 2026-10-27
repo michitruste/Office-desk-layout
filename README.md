@@ -59,6 +59,7 @@ These can't write to files directly. The map saves in the browser instead, and t
 
 ## Good to know
 
+- **Room to grow:** while arranging there's always free space on every side of the map. Put something in the space at the top or left and the whole map shifts over to make more, so the column and row numbers of everything change by the same amount. Undo still works as usual.
 - **Internet:** Excel import and export load a spreadsheet library from the internet, so they need a connection. Everything else, including the CAD (.dxf) export and JSON backups, works offline.
 - **Backups:** **Data → Download backup** saves a complete copy you can load anywhere. **Export → Excel workbook** is also re-importable.
 - **Clearing the browser's site data** erases the browser copy. If a data file is linked, the file still has everything.
