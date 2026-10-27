@@ -95,7 +95,6 @@ button,input,select,textarea{font:inherit;color:inherit}
 .zoom button.fit{font-size:13px;border-left:1px solid var(--line);border-radius:0 7px 7px 0;padding:0 10px}
 .zoom button:hover{background:var(--accent-soft)}
 .zoom span{font-family:var(--f-mono);font-size:12px;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
-.confirmbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;padding-top:4px;font-size:14px}
 
 .scroll{flex:1;min-height:0;overflow:auto;position:relative;overscroll-behavior:contain}
 .plan{position:relative;--u:22px;margin:calc(var(--u)*.5);
@@ -693,11 +692,7 @@ function renderTools(){
       <button class="btn small" data-act="addRow">${ICON.row}<span>Row</span></button>
       <button class="btn small" data-act="addArea">${ICON.area}<span>Area</span></button>
       <span class="sep"></span>
-      <button class="btn small" data-act="toggleMulti" aria-pressed="${state.multi}" title="Tap desks to add them to the selection">${ICON.multi}<span>Select several</span></button>
-      <button class="btn small ghost" data-act="renumber" ${state.desks.size ? '' : 'disabled'}>Renumber all</button>${z}`;
-    if (state.confirm === 'renumber') {
-      html += `<div class="confirmbar"><span>Renumber every desk left to right, top to bottom? People stay in their seats.</span><button class="btn small primary" data-act="renumberYes">Renumber</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div>`;
-    }
+      <button class="btn small" data-act="toggleMulti" aria-pressed="${state.multi}" title="Tap desks to add them to the selection">${ICON.multi}<span>Select several</span></button>${z}`;
   } else {
     html = `<span class="hint">Select a desk to see who sits there.</span>${z}`;
   }
@@ -1235,15 +1230,6 @@ function renumberDesks(list, start, order){
   render(true);
   return null;
 }
-function renumberAll(){
-  const ds = desksArr();
-  const first = ds.map(d => deskNumParts(d.number)).find(Boolean);
-  const pre = first ? first.pre : '';
-  const pad = pre ? Math.max(2, String(ds.length).length) : 1;
-  const sorted = ds.sort((a,b) => (a.y - b.y) || (a.x - b.x));
-  sorted.forEach((d, i) => { const number = pre + String(i + 1).padStart(pad, '0'); if (d.number !== number) patchRec('desks', d.id, { number }); });
-  state.confirm = null; render(true); toast('Desks renumbered');
-}
 function deleteSelection(){
   const n = state.sel.size;
   const one = n === 1 ? state.desks.get(single())?.number : null;
@@ -1423,8 +1409,6 @@ document.addEventListener('click', e => {
     case 'addArea': addArea(false); break;
     case 'makeArea': addArea(true); break;
     case 'toggleMulti': state.multi = !state.multi; renderTools(); toast(state.multi ? 'Tap desks to add or remove them from the selection' : 'Tapping a desk selects just that desk'); break;
-    case 'renumber': state.confirm = 'renumber'; renderTools(); break;
-    case 'renumberYes': renumberAll(); break;
     case 'cancelConfirm': state.confirm = null; render(true); break;
     case 'starter': addStarter(); break;
     case 'deselect': state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; render(true); break;
