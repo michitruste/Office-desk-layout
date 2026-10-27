@@ -139,6 +139,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .desk.free .shape{fill:var(--surface);stroke:var(--line-strong);stroke-dasharray:4 3}
 .desk:hover .shape{fill:color-mix(in srgb, var(--tc) 28%, var(--surface))}
 .desk.free:hover .shape{fill:var(--accent-soft)}
+/* on a pillar, across a wall or in a doorway: allowed, but flagged */
+.desk.conflict .shape{stroke:var(--warn);stroke-width:2.25;stroke-dasharray:none}
+.desk .wb{position:absolute;right:calc(var(--u)*-.2);top:calc(var(--u)*-.2);width:max(12px, calc(var(--u)*.62));height:max(12px, calc(var(--u)*.62));border-radius:50%;
+  background:var(--warn);color:var(--surface);font-family:var(--f-mono);font-weight:700;font-size:max(9px, calc(var(--u)*.45));line-height:1;display:grid;place-items:center;pointer-events:none;box-shadow:0 0 0 2px var(--sheet)}
 .desk.selected{z-index:3}
 .desk.selected .shape{stroke:var(--accent);stroke-width:2.75;stroke-dasharray:none;fill:color-mix(in srgb, var(--accent) 16%, var(--surface))}
 .desk.selected.single .shape{stroke:var(--ink);fill:color-mix(in srgb, var(--tc) 17%, var(--surface))}
@@ -152,7 +156,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .desk.blocked .shape{stroke:var(--danger);fill:var(--danger-soft)}
 .desk.ghost{pointer-events:none}
 .desk.ghost.off{display:none}
-.tools [data-act="addDesk"]{cursor:grab;touch-action:none}
+.tools [data-act="addDesk"],.tools [data-act="addPillar"]{cursor:grab;touch-action:none}
 body.placing, body.placing *{cursor:grabbing !important}
 .lbl{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:0 calc(var(--u)*.3);overflow:hidden;pointer-events:none;line-height:1.1;user-select:none;-webkit-user-select:none}
 .lbl.top{bottom:50%}
@@ -168,6 +172,21 @@ body.placing, body.placing *{cursor:grabbing !important}
 .plan.tiny .lbl{padding:0}
 .plan.tiny .lbl .np{display:none}
 .plan.tiny .lbl .num{font-size:max(7px, calc(var(--u)*.95));color:var(--ink);letter-spacing:0}
+/* Walls, doors, windows and pillars: one SVG in grid units, over the desks and under the area outlines */
+.fixtures{position:absolute;left:0;top:0;overflow:visible;z-index:2;pointer-events:none}
+.fixtures *{pointer-events:none}
+.fixtures .clear{display:none}
+.plan.arrange .fixtures .clear{display:inline}
+.plan.arrange:not(.drawing) .fx .hit{pointer-events:stroke;cursor:move}
+.plan.arrange:not(.drawing) .fx .body{pointer-events:all;cursor:move}
+.plan.arrange .fixtures .fh{pointer-events:all;cursor:crosshair;fill:var(--accent);stroke:var(--sheet);stroke-width:.12}
+.plan.arrange .fixtures .fh.r{cursor:nwse-resize}
+.fixtures .fsel{stroke:var(--accent);opacity:.35}
+.fixtures .fpre{stroke:var(--accent);stroke-width:.22;stroke-linecap:square}
+.plan.drawing,.plan.drawing .desk,.plan.drawing .zlabel{cursor:crosshair;touch-action:none}
+.fxghost{position:absolute;left:calc(var(--x)*var(--u));top:calc(var(--y)*var(--u));width:var(--u);height:var(--u);z-index:6;pointer-events:none;
+  background:color-mix(in srgb, var(--ink) 35%, var(--sheet));border:1.5px solid var(--ink);opacity:.85}
+.fxghost.off{display:none}
 .marquee{position:absolute;border:1.5px solid var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent);pointer-events:none;z-index:8}
 
 .legend{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--line);background:var(--surface)}
@@ -437,6 +456,21 @@ const LAYOUT_ALIASES = {
   row: ['row','y','fila','top'],
   rot: ['rotation','rot','angle','rotacion','orientation']
 };
+// a Room sheet row: what it is, where it starts, and how far it runs (a wall across has a Height of 0)
+const FIXTURE_ALIASES = {
+  kind: ['item', 'roomitem', 'fixture', 'object', 'elemento'],
+  col: ['column','col','x','columna','left'], row: ['row','y','fila','top'],
+  w: ['width','w','ancho','columns'], h: ['height','h','alto','rows'],
+  swing: ['doorswing', 'swing', 'opens', 'apertura']
+};
+function parseFixtureKind(v){
+  const n = norm(v);
+  if (/wall|pared|muro/.test(n)) return 'wall';
+  if (/door|puerta/.test(n)) return 'door';
+  if (/window|ventana/.test(n)) return 'window';
+  if (/pillar|column|pilar|columna/.test(n)) return 'pillar';
+  return null;
+}
 const AREA_ALIASES = {
   area: ['area','zone','zona','areaname','zonename','name','nombre'],
   col: LAYOUT_ALIASES.col, row: LAYOUT_ALIASES.row,
@@ -446,10 +480,10 @@ const AREA_ALIASES = {
 
 /* ---------- state ---------- */
 const state = {
-  desks: new Map(), people: new Map(), zones: new Map(), settings: new Map(), fieldsDraft: null,
+  desks: new Map(), people: new Map(), zones: new Map(), fixtures: new Map(), settings: new Map(), fieldsDraft: null,
   loaded: false, local: false, readOnly: false,
-  sel: new Set(), selectedZone: null, selectedPerson: null,
-  tab: 'desk', arrange: false, multi: false, query: '', peopleFilter: 'all', noDeskOpen: false,
+  sel: new Set(), selectedZone: null, selectedFixture: null, selectedPerson: null,
+  tab: 'desk', arrange: false, multi: false, tool: null, query: '', peopleFilter: 'all', noDeskOpen: false,
   zoom: window.innerWidth < 880 ? 0.6 : 1,
   editing: null,      // {id, deskId}: person form
   panelMode: null,    // 'addRow'
@@ -531,6 +565,7 @@ function extent(){
   let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
   for (const d of state.desks.values()) { const s = SHAPES[d.shape] || SHAPES.h; minX = Math.min(minX, d.x); minY = Math.min(minY, d.y); maxX = Math.max(maxX, d.x + s.w); maxY = Math.max(maxY, d.y + s.h); }
   for (const z of state.zones.values()) { minX = Math.min(minX, z.x); minY = Math.min(minY, z.y); maxX = Math.max(maxX, z.x + z.w); maxY = Math.max(maxY, z.y + z.h); }
+  for (const f of state.fixtures.values()) { const b = fixtureBox(f); minX = Math.min(minX, b.x); minY = Math.min(minY, b.y); maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h); }
   return { minX: isFinite(minX) ? minX : 0, minY: isFinite(minY) ? minY : 0, maxX, maxY };
 }
 // Size of the drawing sheet in squares. When viewing, it hugs the layout with the same margin on both sides
@@ -542,13 +577,15 @@ function sheetSize(arranging){
 }
 // first top-left spot where a w×h box (plus a 1-square margin) is empty
 function findBox(w, h){
-  const occ = occupancy();
+  const occ = occupancy(), fx = fixtureCtx();
+  for (const c of [...fx.pillar, ...fx.door]) occ.add(c);
   const { maxX, maxY } = extent();
   const limitX = Math.max(maxX, w + 2, 30);
   for (let y = 1; y <= maxY + 2; y++) {
     for (let x = 1; x + w <= limitX + 1; x++) {
       let ok = true;
       for (let yy = y - 1; yy <= y + h && ok; yy++) for (let xx = x - 1; xx <= x + w; xx++) if (occ.has(xx + ',' + yy)) { ok = false; break; }
+      if (ok && issuesOf(boxCells(x, y, w, h), fx).length) ok = false;
       if (ok) return { x, y };
     }
   }
@@ -590,6 +627,73 @@ function connectedDesks(startId){
   return seen;
 }
 
+/* ---------- walls, doors, windows and pillars ---------- */
+// Walls, doors and windows are straight segments along the grid lines, from corner (x1,y1) to (x2,y2) with x1 ≤ x2 and
+// y1 ≤ y2. Pillars cover whole squares, like desks. They never stop a desk from being placed: desks that sit on a
+// pillar, cross a wall or stand in a doorway are only flagged.
+const FIX = { wall: 'Wall', door: 'Door', window: 'Window', pillar: 'Pillar' };
+const WALL = 0.22; // wall thickness in squares (about 9 cm at 40 cm a square)
+const REASON = { pillar: 'is on a pillar', wall: 'crosses a wall', door: 'blocks a door' };
+const isSeg = f => f.kind !== 'pillar';
+const segLen = f => (f.x2 - f.x1) + (f.y2 - f.y1);
+const joinAnd = l => l.length > 1 ? l.slice(0, -1).join(', ') + ' and ' + l[l.length - 1] : l[0] || '';
+function normSeg(f){
+  const [x1, x2] = [Math.min(f.x1, f.x2), Math.max(f.x1, f.x2)], [y1, y2] = [Math.min(f.y1, f.y2), Math.max(f.y1, f.y2)];
+  return { ...f, x1, y1, x2, y2 };
+}
+function fixtureBox(f){ return isSeg(f) ? { x: f.x1, y: f.y1, w: f.x2 - f.x1, h: f.y2 - f.y1 } : { x: f.x, y: f.y, w: f.w, h: f.h }; }
+function boxCells(x, y, w, h){ const out = []; for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) out.push((x + c) + ',' + (y + r)); return out; }
+// a segment's unit edges: ['h', x, y] is the top edge of square x,y; ['v', x, y] its left edge
+function segEdges(f){
+  const out = [];
+  if (f.y1 === f.y2) for (let x = f.x1; x < f.x2; x++) out.push(['h', x, f.y1]);
+  else for (let y = f.y1; y < f.y2; y++) out.push(['v', f.x1, y]);
+  return out;
+}
+// swing: bit 1 opens down/right (otherwise up/left), bit 2 hinges at the far end (otherwise at x1,y1)
+function doorGeom(f){
+  const L = segLen(f), horiz = f.y1 === f.y2, side = f.swing & 1 ? 1 : -1, far = f.swing & 2;
+  const hinge = far ? [f.x2, f.y2] : [f.x1, f.y1], other = far ? [f.x1, f.y1] : [f.x2, f.y2];
+  const leaf = horiz ? [hinge[0], hinge[1] + side * L] : [hinge[0] + side * L, hinge[1]];
+  const sweep = (other[0] - hinge[0]) * (leaf[1] - hinge[1]) - (other[1] - hinge[1]) * (leaf[0] - hinge[0]) > 0 ? 1 : 0;
+  // the squares the door sweeps through as it opens
+  const clear = horiz ? { x: f.x1, y: side > 0 ? f.y1 : f.y1 - L, w: L, h: L } : { x: side > 0 ? f.x1 : f.x1 - L, y: f.y1, w: L, h: L };
+  return { L, hinge, other, leaf, sweep, clear };
+}
+// everything the conflict check needs, worked out once
+function fixtureCtx(list = state.fixtures.values()){
+  const fx = { pillar: new Set(), door: new Set(), walls: [], doors: [], any: false };
+  for (const f of list) {
+    fx.any = true;
+    if (f.kind === 'pillar') boxCells(f.x, f.y, f.w, f.h).forEach(c => fx.pillar.add(c));
+    else if (f.kind === 'door') { const c = doorGeom(f).clear; boxCells(c.x, c.y, c.w, c.h).forEach(k => fx.door.add(k)); fx.doors.push(...segEdges(f)); }
+    else fx.walls.push(...segEdges(f));
+  }
+  return fx;
+}
+// why squares `cells` (one desk) clash with the room: a list of REASON keys
+function issuesOf(cells, fx){
+  if (!fx.any) return [];
+  const S = new Set(cells), out = [];
+  const crosses = edges => edges.some(([o, x, y]) => S.has(x + ',' + y) && S.has(o === 'h' ? x + ',' + (y - 1) : (x - 1) + ',' + y));
+  if (cells.some(c => fx.pillar.has(c))) out.push('pillar');
+  if (crosses(fx.walls)) out.push('wall');
+  if (cells.some(c => fx.door.has(c)) || crosses(fx.doors)) out.push('door');
+  return out;
+}
+function fixtureConflicts(desks = state.desks.values(), fx = fixtureCtx()){
+  const out = new Map();
+  if (!fx.any) return out;
+  for (const d of desks) { const r = issuesOf(cellsOf(d.shape, d.rot || 0, d.x, d.y), fx); if (r.length) out.set(d.id, r); }
+  return out;
+}
+function clashNote(ids){
+  const c = fixtureConflicts(ids.map(id => state.desks.get(id)).filter(Boolean));
+  if (!c.size) return '';
+  if (c.size === 1) { const [id, r] = [...c][0]; return ` Desk ${state.desks.get(id).number} ${joinAnd(r.map(k => REASON[k]))}.`; }
+  return ` ${c.size} of these desks are on a pillar, across a wall or in a doorway.`;
+}
+
 /* ---------- storage ---------- */
 const writing = new Map();
 let active = 0; const waiters = [];
@@ -598,7 +702,7 @@ async function gate(fn){
   active++;
   try { return await fn(); } finally { active--; const w = waiters.shift(); if (w) w(); }
 }
-const COLS = { desks: () => state.desks, people: () => state.people, zones: () => state.zones, settings: () => state.settings };
+const COLS = { desks: () => state.desks, people: () => state.people, zones: () => state.zones, fixtures: () => state.fixtures, settings: () => state.settings };
 function setRec(col, rec){ logChange(col, rec.id); COLS[col]().set(rec.id, rec); sync(col, rec.id); }
 function patchRec(col, id, patch){ const m = COLS[col](); const cur = m.get(id); if (!cur) return; logChange(col, id); m.set(id, { ...cur, ...patch }); sync(col, id); }
 function delRec(col, id){ logChange(col, id); COLS[col]().delete(id); sync(col, id); }
@@ -639,7 +743,7 @@ function undoRedo(isRedo){
   to.push(applyStep(s));
   const ids = s.filter(e => e.col === 'desks' && state.desks.has(e.id)).map(e => e.id);
   state.sel = state.arrange && ids.length ? new Set(ids) : new Set([...state.sel].filter(id => state.desks.has(id)));
-  state.selectedZone = null; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.selectedZone = null; state.selectedFixture = null; state.confirm = null; state.editing = null; state.panelMode = null;
   render(true);
   toast(isRedo ? 'Redone' : 'Undone. Press Ctrl+Y to redo.');
 }
@@ -731,6 +835,7 @@ function renderNow(){
   rebuildTeamColors();
   for (const id of [...state.sel]) if (!state.desks.has(id)) state.sel.delete(id);
   if (state.selectedZone && !state.zones.has(state.selectedZone)) state.selectedZone = null;
+  if (state.selectedFixture && !state.fixtures.has(state.selectedFixture)) state.selectedFixture = null;
   if (state.selectedPerson && !state.people.has(state.selectedPerson)) state.selectedPerson = null;
   const f = forcePanelNext; forcePanelNext = false;
   renderStats(); renderNotices(); renderTools(); renderPlan(); renderLegend(); renderPanel(f);
@@ -749,9 +854,11 @@ function renderStats(){
   const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
   const wfh = [...state.people.values()].filter(p => p.wfh && !si.has(p.id)).length;
   const noDesk = state.people.size - si.size - wfh;
+  const clash = fixtureConflicts(ds).size;
   el.innerHTML = `<span><b>${ds.length}</b> desks</span><span><b>${seated}</b> seated</span><span><b>${ds.length - seated}</b> free</span>`
     + (noDesk > 0 ? `<button class="warn statbtn" data-act="showNoDesk" title="Show who's without a desk"><b>${noDesk}</b> without a desk</button>` : '')
-    + (wfh > 0 ? `<button class="statbtn" data-act="showWfh" title="Show who works from home"><b>${wfh}</b> WFH</button>` : '');
+    + (wfh > 0 ? `<button class="statbtn" data-act="showWfh" title="Show who works from home"><b>${wfh}</b> WFH</button>` : '')
+    + (clash > 0 ? `<button class="warn statbtn" data-act="showClash" title="Desks on a pillar, across a wall or in a doorway. Click to select them."><b>${clash}</b> ${clash === 1 ? 'desk clashes' : 'desks clash'} with the room</button>` : '');
   $('#peopleCount').textContent = state.people.size ? state.people.size : '';
 }
 
@@ -785,9 +892,18 @@ const ICON = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   fitW: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M21 5v14M7 12h10M10 9l-3 3 3 3M14 9l3 3-3 3"/></svg>',
   fitH: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14M5 21h14M12 7v10M9 10l3-3 3 3M9 14l3 3 3-3"/></svg>',
+  wall: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="square" aria-hidden="true"><path d="M4 20V4h16"/></svg>',
+  door: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 20h4M18 20h4" stroke-width="3.2" stroke-linecap="square"/><path d="M6 20V8"/><path d="M6 8a12 12 0 0 1 12 12" stroke-dasharray="2 2.5"/></svg>',
+  window: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="9" width="18" height="6"/><path d="M3 12h18"/></svg>',
+  pillar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="currentColor" fill-opacity=".3"/><path d="m6 6 12 12M18 6 6 18"/></svg>',
   grip: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>'
 };
 
+const FIX_TIPS = {
+  wall: 'Draw walls: drag along the grid lines',
+  door: 'Draw a door: drag along a wall for its width, or click for a standard one',
+  window: 'Draw a window: drag along a wall'
+};
 function renderTools(){
   const ur = state.readOnly ? '' : `<button class="btn small ghost" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${undoLog.undo.length || undoLog.step ? '' : 'disabled'}>${ICON.undo}</button><button class="btn small ghost" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo" ${undoLog.redo.length ? '' : 'disabled'}>${ICON.redo}</button>`;
   const z = `<div class="spacer"></div>${ur}<div class="zoom" role="group" aria-label="Zoom"><button data-act="zoomOut" aria-label="Zoom out">−</button><span>${Math.round(state.zoom*100)}%</span><button data-act="zoomIn" aria-label="Zoom in">+</button><button class="fit" data-act="fit" title="Fit the whole map (Ctrl+0 over the map)">Fit</button><button class="fit" data-act="fitW" title="Fit the width" aria-label="Fit the width">${ICON.fitW}</button><button class="fit" data-act="fitH" title="Fit the height" aria-label="Fit the height">${ICON.fitH}</button></div>`;
@@ -800,6 +916,10 @@ function renderTools(){
       <button class="btn small" data-act="addRow">${ICON.row}<span>Row</span></button>
       <button class="btn small" data-act="addArea">${ICON.area}<span>Area</span></button>
       <span class="sep"></span>
+      <span class="lab">Room</span>
+      ${['wall', 'door', 'window'].map(k => `<button class="btn small" data-act="tool" data-tool="${k}" aria-pressed="${state.tool === k}" title="${FIX_TIPS[k]}">${ICON[k]}<span>${FIX[k]}</span></button>`).join('')}
+      <button class="btn small" data-act="addPillar" title="Pillar: drag onto the map, or click to add">${ICON.pillar}<span>Pillar</span></button>
+      <span class="sep"></span>
       <button class="btn small" data-act="toggleMulti" aria-pressed="${state.multi}" title="Tap desks to add them to the selection">${ICON.multi}<span>Select several</span></button>${z}`;
   } else {
     html = `<span class="hint">Select a desk to see who sits there.</span>${z}`;
@@ -807,7 +927,7 @@ function renderTools(){
   $('#tools').innerHTML = html;
 }
 
-function deskHTML(d, hits){
+function deskHTML(d, hits, clash){
   const s = SHAPES[d.shape] || SHAPES.h;
   const rot = d.rot || 0;
   const p = d.personId ? state.people.get(d.personId) : null;
@@ -816,13 +936,15 @@ function deskHTML(d, hits){
     : `<rect class="shape" x="0.05" y="0.05" width="${s.w - .1}" height="${s.h - .1}" rx="0.2"/>`;
   const lblCls = d.shape === 'v' ? 'vert' : d.shape === 'corner' ? (rot === 180 || rot === 270 ? 'bottom' : 'top') : '';
   const isSel = state.sel.has(d.id);
-  const cls = ['desk', p ? '' : 'free', isSel ? 'selected' : '', isSel && state.sel.size === 1 ? 'single' : '', hits && hits.has(d.id) ? 'hit' : ''].filter(Boolean).join(' ');
+  const issues = clash && clash.get(d.id);
+  const cls = ['desk', p ? '' : 'free', isSel ? 'selected' : '', isSel && state.sel.size === 1 ? 'single' : '', hits && hits.has(d.id) ? 'hit' : '', issues ? 'conflict' : ''].filter(Boolean).join(' ');
   const tc = p ? teamVar(p.team) : 'var(--line-strong)';
-  const label = `Desk ${d.number}${p ? ', ' + p.name : ', free'}`;
+  const label = `Desk ${d.number}${p ? ', ' + p.name : ', free'}${issues ? `. It ${joinAnd(issues.map(k => REASON[k]))}` : ''}`;
   return `<div class="${cls}" data-id="${esc(d.id)}" role="button" tabindex="0" aria-label="${esc(label)}" title="${esc(label)}" aria-pressed="${isSel}"
     style="--x:${d.x};--y:${d.y};--w:${s.w};--h:${s.h};--tc:${tc}">
     <svg viewBox="0 0 ${s.w} ${s.h}" preserveAspectRatio="none" aria-hidden="true">${shape}</svg>
     <div class="lbl ${lblCls}">${numHTML(d.number)}<span class="nm">${p ? esc(shortName(p.name)) : 'Free'}</span></div>
+    ${issues ? '<span class="wb" aria-hidden="true">!</span>' : ''}
   </div>`;
 }
 // any letters before the number are wrapped so they can be dropped when zoomed far out
@@ -844,10 +966,45 @@ function zoneTopHTML(z){
   </div>`;
 }
 
+// one fixture drawn in grid units. c holds the colours as CSS values, so the map and the picture export share the drawing.
+function fixtureSVG(f, c){
+  const ln = (a, b, stroke, w, cap = 'butt') => `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" style="stroke:${stroke};stroke-width:${w};stroke-linecap:${cap}"/>`;
+  if (f.kind === 'pillar') return `<rect class="body" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" style="fill:${c.pillar};stroke:${c.ink};stroke-width:.07"/>`
+    + ln([f.x, f.y], [f.x + f.w, f.y + f.h], c.ink, .04) + ln([f.x + f.w, f.y], [f.x, f.y + f.h], c.ink, .04);
+  const a = [f.x1, f.y1], b = [f.x2, f.y2];
+  if (f.kind === 'wall') return ln(a, b, c.ink, WALL, 'square');
+  if (f.kind === 'window') return ln(a, b, c.ink, WALL, 'square') + ln(a, b, c.paper, WALL * .45) + ln(a, b, c.ink, .03);
+  // a door is an opening in the wall, with its leaf standing open and the arc it swings through
+  const g = doorGeom(f);
+  return ln(a, b, c.paper, WALL + .08) + ln(g.hinge, g.leaf, c.ink, .07, 'round')
+    + `<path d="M${g.other[0]} ${g.other[1]}A${g.L} ${g.L} 0 0 ${g.sweep} ${g.leaf[0]} ${g.leaf[1]}" style="fill:none;stroke:${c.ink};stroke-width:.035;stroke-dasharray:.16 .1"/>`;
+}
+// draw order: pillars, then walls, then the windows and doors set into them
+const FIX_ORDER = { pillar: 0, wall: 1, window: 2, door: 3 };
+const fixturesSorted = () => [...state.fixtures.values()].sort((a, b) => FIX_ORDER[a.kind] - FIX_ORDER[b.kind]);
+const FIX_SCREEN = { ink: 'var(--ink)', paper: 'var(--sheet)', pillar: 'color-mix(in srgb, var(--ink) 30%, var(--sheet))' };
+function fixtureInner(f, sel){
+  let out = '';
+  if (f.kind === 'door') { const c = doorGeom(f).clear; out += `<rect class="clear" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" style="fill:color-mix(in srgb, var(--warn) 9%, transparent);stroke:color-mix(in srgb, var(--warn) 40%, transparent);stroke-width:.04;stroke-dasharray:.2 .15"/>`; }
+  if (sel) out += isSeg(f) ? `<line class="fsel" x1="${f.x1}" y1="${f.y1}" x2="${f.x2}" y2="${f.y2}" style="stroke-width:.7;stroke-linecap:round"/>` : `<rect class="fsel" x="${f.x - .15}" y="${f.y - .15}" width="${f.w + .3}" height="${f.h + .3}" style="fill:none;stroke-width:.3"/>`;
+  out += fixtureSVG(f, FIX_SCREEN);
+  if (isSeg(f)) out += `<line class="hit" x1="${f.x1}" y1="${f.y1}" x2="${f.x2}" y2="${f.y2}" style="stroke:transparent;stroke-width:.5"/>`;
+  if (sel && state.arrange) out += isSeg(f)
+    ? `<circle class="fh" data-fh="1" cx="${f.x1}" cy="${f.y1}" r=".42"/><circle class="fh" data-fh="2" cx="${f.x2}" cy="${f.y2}" r=".42"/>`
+    : `<circle class="fh r" data-fh="r" cx="${f.x + f.w}" cy="${f.y + f.h}" r=".42"/>`;
+  return out;
+}
+function fixturesLayerHTML(cols, rows){
+  return `<svg class="fixtures" viewBox="0 0 ${cols} ${rows}" style="width:calc(${cols} * var(--u));height:calc(${rows} * var(--u))" aria-hidden="true">`
+    + fixturesSorted().map(f => `<g class="fx" data-fid="${esc(f.id)}">${fixtureInner(f, state.selectedFixture === f.id)}</g>`).join('')
+    + '</svg>';
+}
+
 const planEl = $('#plan');
 function renderPlan(){
   planEl.style.setProperty('--u', (U_BASE * state.zoom) + 'px');
   planEl.classList.toggle('arrange', state.arrange);
+  planEl.classList.toggle('drawing', state.arrange && !!state.tool);
   planEl.classList.toggle('tiny', state.zoom < 0.45);
   planEl.classList.toggle('small', state.zoom >= 0.45 && state.zoom < 0.7);
   const ds = desksArr();
@@ -858,9 +1015,11 @@ function renderPlan(){
   if (!state.loaded) { planEl.innerHTML = `<div class="plan-msg"><p>Loading desk map…</p></div>`; return; }
   if (!ds.length && !state.zones.size) {
     planEl.classList.remove('searching');
-    planEl.innerHTML = `<div class="plan-msg"><h2>No desks yet</h2>
-      <p>Open your desk-map-data.json, build the floor row by row, import a layout from Excel, or start from a small starter layout.</p>
-      <div class="row2">${state.readOnly ? '' : `<button class="btn primary" data-act="addRow">${ICON.row}Add a row of desks</button><button class="btn" data-act="openData">Open a data file</button><button class="btn" data-act="openImport">Import from Excel</button><button class="btn" data-act="starter">Starter layout</button>`}</div></div>`;
+    // the walls can go in before any desks
+    planEl.innerHTML = (state.fixtures.size || state.tool ? '' : `<div class="plan-msg"><h2>No desks yet</h2>
+      <p>Open your desk-map-data.json, build the floor row by row, import a layout from Excel, or start from a small starter layout. To draw the room's walls first, turn on Arrange desks.</p>
+      <div class="row2">${state.readOnly ? '' : `<button class="btn primary" data-act="addRow">${ICON.row}Add a row of desks</button><button class="btn" data-act="openData">Open a data file</button><button class="btn" data-act="openImport">Import from Excel</button><button class="btn" data-act="starter">Starter layout</button>`}</div></div>`)
+      + fixturesLayerHTML(cols, rows);
     return;
   }
   const q = state.query.trim().toLowerCase();
@@ -873,9 +1032,10 @@ function renderPlan(){
     }
   }
   planEl.classList.toggle('searching', !!q);
-  const zs = [...state.zones.values()];
+  const zs = [...state.zones.values()], clash = fixtureConflicts(ds);
   planEl.innerHTML = zs.map(zoneFillHTML).join('')
-    + ds.sort((a,b) => (a.y - b.y) || (a.x - b.x)).map(d => deskHTML(d, hits)).join('')
+    + ds.sort((a,b) => (a.y - b.y) || (a.x - b.x)).map(d => deskHTML(d, hits, clash)).join('')
+    + fixturesLayerHTML(cols, rows)
     + zs.map(zoneTopHTML).join('');
 }
 
@@ -900,6 +1060,7 @@ function renderPanel(force){
   if (!state.loaded) { body.innerHTML = '<p class="muted">Loading…</p>'; return; }
   if (state.tab === 'people') { body.innerHTML = peoplePanelHTML(); return; }
   if (state.selectedZone) { body.innerHTML = zonePanelHTML(); return; }
+  if (state.selectedFixture) { body.innerHTML = fixturePanelHTML(); return; }
   if (state.sel.size > 1) { body.innerHTML = groupPanelHTML(); return; }
   body.innerHTML = state.sel.size === 1 ? deskPanelHTML() : overviewHTML();
 }
@@ -943,6 +1104,8 @@ function deskPanelHTML(){
   const ro = state.readOnly;
   let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">${esc(s.label)} desk</span><div class="dnum">${esc(d.number)}</div></div>
     <div class="row2">${p ? '<span class="pill ok">Occupied</span>' : '<span class="pill free">Free</span>'}<button class="btn small ghost" data-act="deselect">Close</button></div></div>`;
+  const issues = fixtureConflicts([d]).get(d.id);
+  if (issues) html += `<div class="notice"><p>This desk ${esc(joinAnd(issues.map(k => REASON[k])))}. ${state.arrange && !ro ? 'Drag it somewhere clear, or leave it if that’s fine.' : 'Turn on Arrange desks to move it.'}</p></div>`;
 
   if (state.arrange && !ro) {
     html += `<div class="box"><h3>Desk setup</h3>
@@ -1049,6 +1212,31 @@ function zonePanelHTML(){
   return html;
 }
 
+const fmtM = cm => `${(cm / 100).toFixed(2).replace(/\.?0+$/, '')} m`;
+function fixturePanelHTML(){
+  const f = state.fixtures.get(state.selectedFixture);
+  if (!f) return overviewHTML();
+  const cm = cadOpts.squareCm, seg = isSeg(f), L = seg ? segLen(f) : 0, door = f.kind === 'door';
+  const size = seg ? `${L} ${L === 1 ? 'square' : 'squares'} long (about ${fmtM(L * cm)}), running ${f.y1 === f.y2 ? 'across' : 'down'}`
+    : `${f.w} × ${f.h} ${f.w * f.h === 1 ? 'square' : 'squares'} (about ${fmtM(f.w * cm)} × ${fmtM(f.h * cm)})`;
+  const hit = [...fixtureConflicts(state.desks.values(), fixtureCtx([f])).keys()].map(id => state.desks.get(id)).sort(byNumber);
+  const num = (id, label, v, min) => `<div class="stack"><label class="l" for="${id}">${label}</label><input class="input mono" id="${id}" type="number" min="${min}" value="${v}"></div>`;
+  let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">Room</span><div class="dnum">${FIX[f.kind]}</div></div>
+    <button class="btn small ghost" data-act="deselect">Close</button></div>
+    <p class="sm muted" style="margin:0">${size}. Sizes use ${cm} cm a square, the scale set under Export → CAD drawing.</p>`;
+  if (hit.length) html += `<div class="notice"><p>${hit.length === 1 ? `Desk ${esc(hit[0].number)} is` : `Desks ${esc(deskList(hit))} are`} in its way.</p><div class="row"><button class="btn small" data-act="selectIds" data-ids="${esc(hit.map(d => d.id).join(' '))}">Select ${hit.length === 1 ? 'it' : 'them'}</button></div></div>`;
+  if (!state.arrange || state.readOnly) return html;
+  html += `<div class="box"><h3>Position and size</h3>
+    <div class="grid2">${seg
+      ? num('fixX', 'Column', f.x1, 0) + num('fixY', 'Row', f.y1, 0) + num('fixL', 'Length (squares)', L, 1)
+        + `<div class="stack"><label class="l" for="fixD">Runs</label><select class="input" id="fixD"><option value="h" ${f.y1 === f.y2 ? 'selected' : ''}>Across</option><option value="v" ${f.y1 === f.y2 ? '' : 'selected'}>Down</option></select></div>`
+      : num('fixX', 'Column', f.x, 0) + num('fixY', 'Row', f.y, 0) + num('fixW', 'Width', f.w, 1) + num('fixH', 'Height', f.h, 1)}</div>
+    <div class="row2"><button class="btn small primary" data-act="saveFixture">Save</button>${door ? '<button class="btn small" data-act="flipDoor" data-bit="1">Open to the other side</button><button class="btn small" data-act="flipDoor" data-bit="2">Hinge at the other end</button>' : ''}</div>
+    <span class="sm muted">Drag it on the map to move it, and drag the round ${seg ? 'handles to move its ends' : 'handle to resize it'}. Arrow keys nudge it. Press Delete to remove it.${door ? ' The shaded squares are where the door swings; desks there are flagged.' : ''}</span>
+    <div><button class="btn small danger" data-act="deleteFixture">Delete ${FIX[f.kind].toLowerCase()}</button></div></div>`;
+  return html;
+}
+
 function overviewHTML(){
   const ds = desksArr(), si = seatIndex();
   const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
@@ -1057,7 +1245,7 @@ function overviewHTML(){
   const ts = teams();
   let html = `<div class="stack" style="gap:4px"><span class="eyebrow">Overview</span>
     <p style="margin:0">${state.arrange
-      ? 'Drag a desk from the toolbar straight onto the map, or add whole rows. Drag desks to move them. To move many at once, drag a box around them with the mouse, or tap “Select several” and tap each one. Ctrl+Z undoes any change.'
+      ? 'Drag a desk from the toolbar straight onto the map, or add whole rows. Drag desks to move them. To move many at once, drag a box around them with the mouse, or tap “Select several” and tap each one. Use the Room tools to draw walls, doors, windows and pillars: desks can still go anywhere, but ones in their way are flagged. Ctrl+Z undoes any change.'
       : 'Select a desk on the map to see who sits there and their details.'}</p></div>
     <div class="overview"><div class="ov"><b>${ds.length}</b><span>Desks</span></div><div class="ov"><b>${seated}</b><span>Seated</span></div><div class="ov"><b>${ds.length - seated}</b><span>Free</span></div>
       <button class="ov" data-act="showPeople"><b>${state.people.size}</b><span>People</span></button>
@@ -1310,7 +1498,7 @@ function addRow(){
     setRec('desks', d); ids.push(d.id);
   });
   const waited = seatWaiting();
-  state.panelMode = null; state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null;
+  state.panelMode = null; state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null;
   render(true);
   scrollToCell(at.x, at.y);
   toast(`Added ${total} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the whole row.` + waitNote(waited));
@@ -1318,7 +1506,7 @@ function addRow(){
 
 /* ---------- actions ---------- */
 function selectDesk(id, opts = {}){
-  state.sel = new Set([id]); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.sel = new Set([id]); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
   const d = state.desks.get(id);
   state.selectedPerson = d && d.personId ? d.personId : null;
   render(true);
@@ -1326,12 +1514,12 @@ function selectDesk(id, opts = {}){
   if (opts.scrollPanel && window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
 }
 function toggleInSelection(id){
-  state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
   if (state.sel.has(id)) state.sel.delete(id); else state.sel.add(id);
   render(true);
 }
 function selectSet(ids){
-  state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
   render(true);
 }
 function scrollToCell(x, y){
@@ -1355,7 +1543,7 @@ function addDesk(shape, at){
   setRec('desks', d);
   const waited = seatWaiting();
   selectDesk(d.id, { scrollMap: !at });
-  toast((at ? `Added desk ${d.number}.` : `Added desk ${d.number}. Drag it into place, or next time drag the button straight onto the map.`) + waitNote(waited));
+  toast((at ? `Added desk ${d.number}.` : `Added desk ${d.number}. Drag it into place, or next time drag the button straight onto the map.`) + clashNote([d.id]) + waitNote(waited));
 }
 function rotateDesk(id){
   const d = state.desks.get(id); if (!d) return;
@@ -1424,8 +1612,8 @@ function copySelection(){
 }
 // the free spot nearest to `want` where the whole block fits, otherwise the first free spot on the map
 function pasteClip(clip, want){
-  const occ = occupancy();
-  const fits = (x, y) => x >= 0 && y >= 0 && clip.items.every(it => !cellsOf(it.shape, it.rot, x + it.dx, y + it.dy).some(c => occ.has(c)));
+  const occ = occupancy(), fx = fixtureCtx();
+  const fits = (x, y) => x >= 0 && y >= 0 && clip.items.every(it => { const cs = cellsOf(it.shape, it.rot, x + it.dx, y + it.dy); return !cs.some(c => occ.has(c)) && !issuesOf(cs, fx).length; });
   let spot = null;
   for (let r = 0; r <= 30 && !spot; r++) {
     let best = Infinity;
@@ -1440,7 +1628,7 @@ function pasteClip(clip, want){
   const nums = numberSeq(nextDeskNumber(), placed.length);
   const ids = placed.map((p, i) => { const d = { id: uid('d'), number: nums[i], ...p, personId: null }; setRec('desks', d); return d.id; });
   const waited = seatWaiting();
-  state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
   render(true); scrollToCell(spot.x, spot.y);
   toast((ids.length === 1 ? `Added desk ${nums[0]}.` : `Added ${ids.length} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the group.`) + waitNote(waited));
 }
@@ -1485,9 +1673,53 @@ function mirrorSelection(axis){
   render(true);
   toast(axis === 'h' ? 'Flipped left to right' : 'Flipped top to bottom');
 }
+function setTool(t){
+  if (t && !state.arrange) setArrange(true);
+  state.tool = t;
+  if (t) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; }
+  render(true);
+  if (t) toast(`Drag along the grid lines to draw ${t === 'wall' ? 'walls' : t === 'door' ? 'a door, or click for a 2-square one' : 'a window, or click for a 2-square one'}. Press Esc or click ${FIX[t]} again when you're done.`);
+}
+function addFixture(f){
+  const rec = { id: uid('f'), ...(isSeg(f) ? normSeg(f) : f) };
+  setRec('fixtures', rec);
+  state.sel = new Set(); state.selectedZone = null; state.selectedFixture = rec.id; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  render(true);
+  return rec;
+}
+function inWayNote(f){
+  const n = f ? fixtureConflicts(state.desks.values(), fixtureCtx([f])).size : 0;
+  return n ? ` ${n === 1 ? 'A desk is' : n + ' desks are'} in its way.` : '';
+}
+function addPillar(at){
+  const f = addFixture({ kind: 'pillar', ...(at || findBox(1, 1)), w: 1, h: 1 });
+  toast((at ? 'Added a pillar.' : 'Added a pillar. Drag it into place, or next time drag the button straight onto the map.') + ' Drag its round handle to make it bigger.' + inWayNote(f));
+}
+function shiftFixture(f, dx, dy){ return isSeg(f) ? { ...f, x1: f.x1 + dx, x2: f.x2 + dx, y1: f.y1 + dy, y2: f.y2 + dy } : { ...f, x: f.x + dx, y: f.y + dy }; }
+function nudgeFixture(dx, dy){
+  const f = state.fixtures.get(state.selectedFixture); if (!f) return;
+  const b = fixtureBox(f);
+  if (b.x + dx < 0 || b.y + dy < 0) return;
+  patchRec('fixtures', f.id, shiftFixture(f, dx, dy)); render(true);
+}
+function saveFixture(){
+  const f = state.fixtures.get(state.selectedFixture); if (!f) return;
+  const num = (sel, min, cur) => { const n = parseInt($(sel)?.value, 10); return isNaN(n) ? cur : Math.max(min, n); };
+  let nf;
+  if (isSeg(f)) {
+    const x = num('#fixX', 0, f.x1), y = num('#fixY', 0, f.y1), L = num('#fixL', 1, segLen(f)), across = $('#fixD')?.value !== 'v';
+    nf = { ...f, x1: x, y1: y, x2: across ? x + L : x, y2: across ? y : y + L };
+  } else nf = { ...f, x: num('#fixX', 0, f.x), y: num('#fixY', 0, f.y), w: num('#fixW', 1, f.w), h: num('#fixH', 1, f.h) };
+  patchRec('fixtures', f.id, nf); document.activeElement?.blur(); render(true); toast(`${FIX[f.kind]} saved.` + inWayNote(nf));
+}
+function deleteFixture(){
+  const f = state.fixtures.get(state.selectedFixture); if (!f) return;
+  delRec('fixtures', f.id); state.selectedFixture = null; state.confirm = null; render(true);
+  toast(`Deleted the ${FIX[f.kind].toLowerCase()}. Ctrl+Z brings it back.`);
+}
 function deleteSelectedZone(){
   const z = state.zones.get(state.selectedZone);
-  delRec('zones', state.selectedZone); state.selectedZone = null; state.confirm = null; render(true);
+  delRec('zones', state.selectedZone); state.selectedZone = null; state.selectedFixture = null; state.confirm = null; render(true);
   toast(`Deleted area ${z?.name || ''}`.trim());
 }
 function addArea(fromSelection){
@@ -1504,7 +1736,7 @@ function addArea(fromSelection){
     z = { id: uid('z'), name: 'New area', x: Math.max(1, Math.floor(vx / u) + 1), y: Math.max(1, Math.floor(vy / u) + 1), w: 16, h: 10 };
   }
   setRec('zones', z);
-  state.sel = new Set(); state.selectedZone = z.id; state.tab = 'desk'; state.confirm = null; state.panelMode = null;
+  state.sel = new Set(); state.selectedZone = z.id; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.panelMode = null;
   render(true);
   requestAnimationFrame(() => requestAnimationFrame(() => { const i = $('#zoneName'); if (i) { i.focus(); i.select(); } }));
 }
@@ -1618,11 +1850,18 @@ document.addEventListener('click', e => {
     case 'addRow': if (!state.arrange) setArrange(true); state.panelMode = 'addRow'; state.editing = null; state.tab = 'desk'; renderPanel(true); requestAnimationFrame(() => { $('#rowCount')?.focus(); if (window.innerWidth < 880) $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }); }); break;
     case 'cancelRow': state.panelMode = null; renderPanel(true); break;
     case 'addArea': addArea(false); break;
+    case 'tool': setTool(b.dataset.tool === state.tool ? null : b.dataset.tool); break;
+    case 'addPillar': addPillar(); break;
+    case 'saveFixture': saveFixture(); break;
+    case 'flipDoor': { const f = state.fixtures.get(state.selectedFixture); if (f) { patchRec('fixtures', f.id, { swing: (f.swing || 0) ^ +b.dataset.bit }); render(true); } break; }
+    case 'deleteFixture': deleteFixture(); break;
+    case 'showClash': { const ids = [...fixtureConflicts().keys()]; selectSet(ids); toast(`Selected ${ids.length === 1 ? 'the desk' : `the ${ids.length} desks`} on a pillar, across a wall or in a doorway`); break; }
+    case 'selectIds': selectSet(b.dataset.ids.split(' ').filter(id => state.desks.has(id))); break;
     case 'makeArea': addArea(true); break;
     case 'toggleMulti': state.multi = !state.multi; renderTools(); toast(state.multi ? 'Tap desks to add or remove them from the selection' : 'Tapping a desk selects just that desk'); break;
     case 'cancelConfirm': state.confirm = null; render(true); break;
     case 'starter': addStarter(); break;
-    case 'deselect': state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; render(true); break;
+    case 'deselect': state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; render(true); break;
     case 'rotate': if (one) rotateDesk(one); break;
     case 'saveNum': saveDeskNumber(); break;
     case 'selectConnected': if (one) { const s = connectedDesks(one); selectSet(s); toast(`Selected ${s.size} desks`); } break;
@@ -1643,10 +1882,10 @@ document.addEventListener('click', e => {
     case 'openPerson': {
       const at = seatIndex().get(b.dataset.id);
       if (at) selectDesk(at.id, { scrollMap: true });
-      else { state.selectedPerson = b.dataset.id; state.sel = new Set(); state.selectedZone = null; state.tab = 'people'; state.confirm = null; render(true); }
+      else { state.selectedPerson = b.dataset.id; state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.tab = 'people'; state.confirm = null; render(true); }
       break;
     }
-    case 'openZone': state.selectedZone = b.dataset.id; state.sel = new Set(); state.confirm = null; render(true); { const z = state.zones.get(b.dataset.id); if (z) scrollToCell(z.x, z.y); } break;
+    case 'openZone': state.selectedZone = b.dataset.id; state.selectedFixture = null; state.sel = new Set(); state.confirm = null; render(true); { const z = state.zones.get(b.dataset.id); if (z) scrollToCell(z.x, z.y); } break;
     case 'saveZone': saveZoneName(); break;
     case 'selectInZone': case 'filterZone': {
       const z = state.zones.get(state.selectedZone); if (!z) break;
@@ -1724,6 +1963,7 @@ document.addEventListener('input', e => {
 document.addEventListener('keydown', e => {
   if (e.target.id === 'deskNum' && e.key === 'Enter') { e.preventDefault(); saveDeskNumber(); }
   if (/^zone(Name|X|Y|W|H)$/.test(e.target.id) && e.key === 'Enter') { e.preventDefault(); saveZoneName(); }
+  if (/^fix(X|Y|L|W|H)$/.test(e.target.id) && e.key === 'Enter') { e.preventDefault(); saveFixture(); }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
@@ -1784,7 +2024,7 @@ function setQuery(v){ qEl.value = v; state.query = v; renderPlan(); if (state.ta
 function setArrange(on){
   if (state.readOnly) on = false;
   state.arrange = on; state.confirm = null;
-  if (!on) { state.multi = false; state.panelMode = null; if (state.sel.size > 1) state.sel = new Set(); }
+  if (!on) { state.multi = false; state.panelMode = null; state.tool = null; state.selectedFixture = null; if (state.sel.size > 1) state.sel = new Set(); }
   const b = $('#arrangeBtn'); b.setAttribute('aria-pressed', on); b.querySelector('span').textContent = on ? 'Done arranging' : 'Arrange desks';
   render(true);
 }
@@ -1825,6 +2065,24 @@ function autoScroll(){
 }
 planEl.addEventListener('pointerdown', e => {
   if (e.button > 0 || !state.arrange || state.readOnly || e.target.closest('[data-act]')) return;
+  if (state.tool) {
+    e.preventDefault();
+    const c = cellFromEvent(e), x = Math.max(0, Math.round(c.x)), y = Math.max(0, Math.round(c.y));
+    try { planEl.setPointerCapture(e.pointerId); } catch {}
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('class', 'fpre'); planEl.querySelector('.fixtures')?.appendChild(line);
+    drag = { kind: 'draw', tool: state.tool, x1: x, y1: y, x2: x, y2: y, line, moved: false };
+    drawPreview(drag);
+    return;
+  }
+  const fh = e.target.closest('[data-fh]'), fg = e.target.closest('.fx');
+  if (fg) {
+    const id = fg.dataset.fid, f = state.fixtures.get(id); if (!f) return;
+    e.preventDefault();
+    try { planEl.setPointerCapture(e.pointerId); } catch {}
+    drag = { kind: fh ? 'fend' : 'fmove', end: fh?.dataset.fh, id, g: fg, f, nf: f, sx: planPx(e).x, sy: planPx(e).y, moved: false };
+    return;
+  }
   const zh = e.target.closest('[data-zh]');
   const zl = !zh && e.target.closest('.zlabel');
   const el = !zh && !zl && e.target.closest('.desk');
@@ -1843,7 +2101,7 @@ planEl.addEventListener('pointerdown', e => {
     const additive = e.shiftKey || e.metaKey || e.ctrlKey || state.multi;
     const groupIds = state.sel.has(id) && state.sel.size > 1 ? [...state.sel] : [id];
     const members = groupIds.map(mid => { const m = state.desks.get(mid); return { id: mid, el: deskEl(mid), ox: m.x, oy: m.y, shape: m.shape, rot: m.rot || 0 }; });
-    drag = { kind: 'desk', id, members, additive, sx: planPx(e).x, sy: planPx(e).y, dx: 0, dy: 0, moved: false, blocked: false, occ: occupancy(new Set(groupIds)) };
+    drag = { kind: 'desk', id, members, additive, sx: planPx(e).x, sy: planPx(e).y, dx: 0, dy: 0, moved: false, blocked: false, occ: occupancy(new Set(groupIds)), fx: fixtureCtx() };
     return;
   }
   // empty sheet: draw a selection box (mouse/pen only, so touch can still scroll)
@@ -1854,10 +2112,21 @@ planEl.addEventListener('pointerdown', e => {
   try { planEl.setPointerCapture(e.pointerId); } catch {}
   drag = { kind: 'box', sx: c.x, sy: c.y, ex: c.x, ey: c.y, box, additive: e.shiftKey || e.metaKey || e.ctrlKey, moved: false, base: new Set(state.sel) };
 });
+function drawPreview(g){
+  for (const [k, v] of Object.entries({ x1: g.x1, y1: g.y1, x2: g.x2, y2: g.y2 })) g.line.setAttribute(k, v);
+}
 function onPlanMove(e){
   if (!drag) return;
   armAutoScroll(e);
   const u = U_BASE * state.zoom;
+  if (drag.kind === 'draw') {
+    const c = cellFromEvent(e), x = Math.max(0, Math.round(c.x)), y = Math.max(0, Math.round(c.y));
+    // straight lines only: it follows whichever way the pointer has gone further
+    if (Math.abs(x - drag.x1) >= Math.abs(y - drag.y1)) { drag.x2 = x; drag.y2 = drag.y1; } else { drag.x2 = drag.x1; drag.y2 = y; }
+    drag.moved = drag.x2 !== drag.x1 || drag.y2 !== drag.y1;
+    drawPreview(drag);
+    return;
+  }
   if (drag.kind === 'box') {
     const c = cellFromEvent(e); drag.ex = c.x; drag.ey = c.y; drag.moved = true;
     const x0 = Math.min(drag.sx, drag.ex), y0 = Math.min(drag.sy, drag.ey), x1 = Math.max(drag.sx, drag.ex), y1 = Math.max(drag.sy, drag.ey);
@@ -1872,6 +2141,22 @@ function onPlanMove(e){
   const pp = planPx(e), dxp = pp.x - drag.sx, dyp = pp.y - drag.sy;
   if (!drag.moved && Math.hypot(dxp, dyp) < 5) return;
   drag.moved = true;
+  if (drag.kind === 'fmove' || drag.kind === 'fend') {
+    const dx = Math.round(dxp / u), dy = Math.round(dyp / u), f = drag.f;
+    let nf;
+    if (drag.kind === 'fmove') { const b = fixtureBox(f); nf = shiftFixture(f, Math.max(dx, -b.x), Math.max(dy, -b.y)); }
+    else if (drag.end === 'r') nf = { ...f, w: Math.max(1, f.w + dx), h: Math.max(1, f.h + dy) };
+    else {
+      // the other end stays put; the dragged end slides along whichever grid line it has moved further along
+      const [ax, ay] = drag.end === '1' ? [f.x2, f.y2] : [f.x1, f.y1], [mx, my] = drag.end === '1' ? [f.x1, f.y1] : [f.x2, f.y2];
+      let px = Math.max(0, mx + dx), py = Math.max(0, my + dy);
+      if (Math.abs(px - ax) >= Math.abs(py - ay)) py = ay; else px = ax;
+      if (px === ax && py === ay) return;
+      nf = normSeg({ ...f, x1: ax, y1: ay, x2: px, y2: py });
+    }
+    drag.nf = nf; drag.g.innerHTML = fixtureInner(nf, true);
+    return;
+  }
   if (drag.kind === 'zmove' || drag.kind === 'zresize') {
     const dx = Math.round(dxp / u), dy = Math.round(dyp / u);
     if (drag.kind === 'zmove') { drag.nx = Math.max(0, drag.ox + dx); drag.ny = Math.max(0, drag.oy + dy); for (const el of drag.els) { el.style.setProperty('--x', drag.nx); el.style.setProperty('--y', drag.ny); } }
@@ -1892,6 +2177,7 @@ function onPlanMove(e){
   for (const m of drag.members) {
     if (!m.el) continue;
     m.el.classList.add('dragging'); m.el.classList.toggle('blocked', blocked);
+    m.el.classList.toggle('conflict', !blocked && issuesOf(cellsOf(m.shape, m.rot, m.ox + dx, m.oy + dy), drag.fx).length > 0);
     m.el.style.setProperty('--x', m.ox + dx); m.el.style.setProperty('--y', m.oy + dy);
   }
   // grow the sheet while dragging toward its edge
@@ -1907,17 +2193,40 @@ function endDrag(cancelled){
   const flush = () => { if (needsRenderAfterDrag) { needsRenderAfterDrag = false; render(); } };
   if (g.kind === 'box') {
     g.box.remove();
-    if (!g.moved) { if (!g.additive) { state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; if (!state.editing && !state.panelMode) state.tab = 'desk'; render(true); } flush(); return; }
+    if (!g.moved) { if (!g.additive) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; if (!state.editing && !state.panelMode) state.tab = 'desk'; render(true); } flush(); return; }
     needsRenderAfterDrag = false;
     selectSet(g.hit || g.base);
     if ((g.hit || new Set()).size > 1) toast(`Selected ${g.hit.size} desks. Drag any of them to move the group.`);
     return;
   }
+  if (g.kind === 'draw') {
+    g.line.remove();
+    needsRenderAfterDrag = false;
+    if (cancelled) { render(); return; }
+    const f = { kind: g.tool, x1: g.x1, y1: g.y1, x2: g.x2, y2: g.y2 };
+    if (!g.moved) {
+      if (g.tool === 'wall') { toast('Drag along the grid lines to draw a wall'); render(); return; }
+      f.x2 = f.x1 + 2; // a click puts in a 2-square door or window, running across
+    }
+    if (g.tool === 'door') f.swing = 1;
+    const rec = addFixture(f);
+    toast(`Added a ${g.tool}, ${segLen(rec)} ${segLen(rec) === 1 ? 'square' : 'squares'} long.` + inWayNote(rec));
+    return;
+  }
+  if (g.kind === 'fmove' || g.kind === 'fend') {
+    needsRenderAfterDrag = false;
+    const changed = g.moved && !cancelled && g.nf !== g.f;
+    if (changed) patchRec('fixtures', g.id, g.nf);
+    state.selectedFixture = g.id; state.sel = new Set(); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.panelMode = null; state.editing = null;
+    render(true);
+    if (changed) { const n = inWayNote(g.nf); if (n) toast(n.trim()); }
+    return;
+  }
   if (g.kind === 'zmove' || g.kind === 'zresize') {
     needsRenderAfterDrag = false;
-    if (!g.moved || cancelled) { state.selectedZone = g.id; state.sel = new Set(); state.tab = 'desk'; state.confirm = null; state.panelMode = null; render(true); return; }
+    if (!g.moved || cancelled) { state.selectedZone = g.id; state.selectedFixture = null; state.sel = new Set(); state.tab = 'desk'; state.confirm = null; state.panelMode = null; render(true); return; }
     patchRec('zones', g.id, g.kind === 'zmove' ? { x: g.nx, y: g.ny } : { w: g.nw, h: g.nh });
-    state.selectedZone = g.id; state.sel = new Set(); render(true);
+    state.selectedZone = g.id; state.selectedFixture = null; state.sel = new Set(); render(true);
     return;
   }
   for (const m of g.members) m.el?.classList.remove('dragging', 'blocked');
@@ -1929,13 +2238,15 @@ function endDrag(cancelled){
   if (g.blocked || cancelled) {
     for (const m of g.members) if (m.el) { m.el.style.setProperty('--x', m.ox); m.el.style.setProperty('--y', m.oy); }
     if (!cancelled) toast('That spot overlaps another desk');
-    flush();
+    needsRenderAfterDrag = false; render(); // puts back the warnings the drag preview changed
     return;
   }
   needsRenderAfterDrag = false;
   if (g.members.length === 1) state.sel = new Set([g.id]);
   if (g.dx || g.dy) for (const m of g.members) patchRec('desks', m.id, { x: m.ox + g.dx, y: m.oy + g.dy });
   render(true);
+  const note = g.dx || g.dy ? clashNote(g.members.map(m => m.id)) : '';
+  if (note) toast(note.trim());
 }
 planEl.addEventListener('pointerup', () => endDrag(false));
 planEl.addEventListener('pointercancel', () => endDrag(true));
@@ -1944,24 +2255,24 @@ planEl.addEventListener('pointercancel', () => endDrag(true));
 let swallowClick = false;
 $('#tools').addEventListener('pointerdown', e => {
   swallowClick = false;
-  const b = e.target.closest('[data-act="addDesk"]');
+  const b = e.target.closest('[data-act="addDesk"], [data-act="addPillar"]');
   if (!b || e.button > 0 || !state.arrange || state.readOnly) return;
   try { b.setPointerCapture(e.pointerId); } catch {}
-  placing = { shape: b.dataset.shape, sx: e.clientX, sy: e.clientY, moved: false, ghost: null, occ: null, at: null, blocked: false };
+  placing = { shape: b.dataset.shape, pillar: b.dataset.act === 'addPillar', sx: e.clientX, sy: e.clientY, moved: false, ghost: null, occ: null, at: null, blocked: false };
 });
 function onPlaceMove(e){
   const p = placing; if (!p) return;
   if (!p.moved && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 5) return;
-  const s = SHAPES[p.shape];
+  const s = p.pillar ? { w: 1, h: 1 } : SHAPES[p.shape];
   if (!p.moved) {
     p.moved = true;
     document.body.classList.add('placing');
     const tmp = document.createElement('div');
-    tmp.innerHTML = deskHTML({ id: '', number: nextDeskNumber(), shape: p.shape, rot: 0, x: 0, y: 0, personId: null });
+    tmp.innerHTML = p.pillar ? '<div class="fxghost"></div>' : deskHTML({ id: '', number: nextDeskNumber(), shape: p.shape, rot: 0, x: 0, y: 0, personId: null });
     p.ghost = tmp.firstElementChild;
     p.ghost.classList.add('ghost', 'dragging'); p.ghost.removeAttribute('tabindex'); p.ghost.setAttribute('aria-hidden', 'true');
     planEl.appendChild(p.ghost);
-    p.occ = occupancy();
+    p.occ = occupancy(); p.fx = fixtureCtx();
   }
   // only show the desk while the pointer is over the visible part of the map
   const sr = $('#scroll').getBoundingClientRect(), pr = planEl.getBoundingClientRect();
@@ -1973,8 +2284,10 @@ function onPlaceMove(e){
   const c = cellFromEvent(e);
   const x = Math.max(0, Math.round(c.x - s.w / 2)), y = Math.max(0, Math.round(c.y - s.h / 2));
   p.at = { x, y };
-  p.blocked = cellsOf(p.shape, 0, x, y).some(k => p.occ.has(k));
+  // pillars can go anywhere; desks can't overlap other desks, and are flagged if they clash with the room
+  p.blocked = !p.pillar && cellsOf(p.shape, 0, x, y).some(k => p.occ.has(k));
   p.ghost.classList.toggle('blocked', p.blocked);
+  if (!p.pillar) p.ghost.classList.toggle('conflict', !p.blocked && issuesOf(cellsOf(p.shape, 0, x, y), p.fx).length > 0);
   p.ghost.style.setProperty('--x', x); p.ghost.style.setProperty('--y', y);
 }
 document.addEventListener('pointermove', onPlaceMove);
@@ -1985,8 +2298,8 @@ function endPlace(cancelled){
   p.ghost?.remove();
   if (!p.moved) return; // the click handler adds it as before
   swallowClick = true;
-  if (!cancelled && p.at && !p.blocked) { needsRenderAfterDrag = false; addDesk(p.shape, p.at); return; }
-  if (!cancelled) toast(p.at ? 'That spot overlaps another desk' : 'Drop the desk on the map to add it');
+  if (!cancelled && p.at && !p.blocked) { needsRenderAfterDrag = false; if (p.pillar) addPillar(p.at); else addDesk(p.shape, p.at); return; }
+  if (!cancelled) toast(p.at ? 'That spot overlaps another desk' : `Drop the ${p.pillar ? 'pillar' : 'desk'} on the map to add it`);
   if (needsRenderAfterDrag) { needsRenderAfterDrag = false; render(); }
 }
 document.addEventListener('pointerup', () => endPlace(false));
@@ -1994,7 +2307,7 @@ document.addEventListener('pointercancel', () => endPlace(true));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && placing) endPlace(true); });
 // the button still gets a click after a drag; don't also add a desk in the first free spot
 $('#tools').addEventListener('click', e => {
-  if (swallowClick && e.target.closest('[data-act="addDesk"]')) { swallowClick = false; e.stopPropagation(); }
+  if (swallowClick && e.target.closest('[data-act="addDesk"], [data-act="addPillar"]')) { swallowClick = false; e.stopPropagation(); }
 }, true);
 planEl.addEventListener('click', e => {
   if (e.target.closest('[data-act]')) return;
@@ -2002,8 +2315,8 @@ planEl.addEventListener('click', e => {
   const zl = e.target.closest('.zlabel');
   const el = e.target.closest('.desk');
   if (el) selectDesk(el.dataset.id, { scrollPanel: true });
-  else if (zl) { state.selectedZone = zl.dataset.zid; state.sel = new Set(); state.tab = 'desk'; render(true); }
-  else if (!state.editing && !state.panelMode) { state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; state.tab = 'desk'; render(true); }
+  else if (zl) { state.selectedZone = zl.dataset.zid; state.selectedFixture = null; state.sel = new Set(); state.tab = 'desk'; render(true); }
+  else if (!state.editing && !state.panelMode) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; state.tab = 'desk'; render(true); }
 });
 planEl.addEventListener('keydown', e => {
   const el = e.target.closest('.desk'); if (!el) return;
@@ -2030,7 +2343,8 @@ document.addEventListener('keydown', e => {
   if (!$('#importOverlay').hidden) { closeImport(); return; }
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
   if (state.editing || state.panelMode) return;
-  if (state.sel.size || state.selectedZone) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; render(true); }
+  if (state.tool) { if (drag && drag.kind === 'draw') endDrag(true); setTool(null); return; }
+  if (state.sel.size || state.selectedZone || state.selectedFixture) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.confirm = null; render(true); }
 });
 planEl.addEventListener('pointermove', e => { pointerCell = cellFromEvent(e); });
 planEl.addEventListener('pointerleave', () => { pointerCell = null; });
@@ -2072,17 +2386,28 @@ document.addEventListener('keydown', e => {
 // asks first and a second press confirms.
 document.addEventListener('keydown', e => {
   if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-  if (!state.arrange || state.readOnly || (!state.sel.size && !state.selectedZone) || drag || placing) return;
+  if (!state.arrange || state.readOnly || (!state.sel.size && !state.selectedZone && !state.selectedFixture) || drag || placing) return;
   if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
   const a = document.activeElement;
   if (/INPUT|TEXTAREA|SELECT/.test(a?.tagName || '') || a?.isContentEditable) return;
   e.preventDefault();
-  if (!state.sel.size) { deleteSelectedZone(); return; }
+  if (!state.sel.size) { if (state.selectedFixture) deleteFixture(); else deleteSelectedZone(); return; }
   const seated = [...state.sel].some(id => { const d = state.desks.get(id); return d && d.personId && state.people.has(d.personId); });
   if (state.confirm === 'deleteDesk' || (state.sel.size === 1 && !seated)) { deleteSelection(); return; }
   state.confirm = 'deleteDesk'; renderPanel(true);
   $('[data-act="deleteSelYes"]')?.focus();
   toast(`Press ${e.key === 'Backspace' ? 'Backspace' : 'Delete'} again to delete ${state.sel.size === 1 ? 'this desk' : `these ${state.sel.size} desks`}`);
+});
+
+// arrow keys nudge the selected wall, door, window or pillar
+document.addEventListener('keydown', e => {
+  const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (!moves[e.key] || !state.arrange || !state.selectedFixture || drag || placing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
+  const a = document.activeElement;
+  if (/INPUT|TEXTAREA|SELECT|BUTTON/.test(a?.tagName || '') || a?.isContentEditable || a?.closest?.('.desk')) return;
+  e.preventDefault();
+  nudgeFixture(...moves[e.key]);
 });
 
 /* drag a person from the side panel onto a desk on the map to seat them there */
@@ -2233,6 +2558,12 @@ function renderImport(){
     secs.push(`<div class="impsec"><h3>Areas <span class="muted sm">· sheet “${esc(P.areas.sheet)}”</span></h3>
       <div class="sumrow"><span class="pill ok">${P.areas.created} new</span><span class="pill free">${P.areas.updated} updated</span></div></div>`);
   }
+  if (P.fixtures) {
+    const F = P.fixtures, count = k => F.items.filter(f => f.kind === k).length;
+    secs.push(`<div class="impsec"><h3>Walls, doors, windows and pillars <span class="muted sm">· sheet “${esc(F.sheet)}”</span></h3>
+      <div class="sumrow">${Object.keys(FIX).map(k => `<span class="pill ok">${count(k)} ${FIX[k].toLowerCase()}${count(k) === 1 ? '' : 's'}</span>`).join('')}${F.skipped ? `<span class="pill warn">${F.skipped} rows skipped</span>` : ''}</div>
+      <p class="sm muted">${F.replaces ? `These replace the ${F.replaces} already on the map.` : 'They are added to the map.'}${F.skipped ? ' Rows are skipped when the item isn’t a wall, door, window or pillar, or its size doesn’t fit it (a wall, door or window needs a Width or a Height of 0).' : ''}</p></div>`);
+  }
   if (P.people) {
     const Q = P.people;
     const fs = fields();
@@ -2265,7 +2596,7 @@ function renderImport(){
       <tbody>${Q.items.slice(0, 5).map(it => `<tr>${cols.map(c => `<td class="${c === 'desk' || idCols.includes(c) ? 'mono' : ''}">${esc(c === 'desk' ? (it.deskNumber || '') : it.data[c] || '')}</td>`).join('')}<td>${it.existing ? `Update ${esc(it.existing.name || '')}` : 'New'}</td></tr>`).join('')}</tbody></table></div>
       ${Q.items.length > 5 ? `<span class="sm muted">and ${Q.items.length - 5} more</span>` : ''}</div></div>`);
   }
-  const nothing = !P.layout && !P.people && !P.areas;
+  const nothing = !P.layout && !P.people && !P.areas && !P.fixtures;
   if (imp.ignored.length) secs.push(`<p class="sm muted">Sheets not recognised and skipped: ${esc(imp.ignored.join(', '))}. A people sheet needs a Name column; a layout sheet needs Desk, Column and Row.</p>`);
   dlg.innerHTML = `<h2 id="impTitle" tabindex="-1">Review import</h2>
     <p class="muted">${esc(imp.fileName)}</p>
@@ -2331,14 +2662,16 @@ async function readFile(file){
     const XLSX = await loadXLSX();
     // CSV cells are read as typed: otherwise "12/14" in a desk column turns into a date and IDs lose leading zeros
     const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true, raw: /\.csv$/i.test(file.name) });
-    const found = { people: null, layout: null, areas: null }; const ignored = [];
+    const found = { people: null, layout: null, areas: null, fixtures: null }; const ignored = [];
     for (const name of wb.SheetNames) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
       if (!rows.length) continue;
       const headers = Object.keys(rows[0]);
       const am = mapHeaders(headers, AREA_ALIASES), lm = mapHeaders(headers, LAYOUT_ALIASES), dups = {}, cm = autoPeopleMap(headers, dups);
       const looksLikePeople = Object.values(cm).some(k => k === 'name' || k === 'firstName');
-      if (am.col && am.row && am.w && am.h && !found.areas) found.areas = { sheet: name, rows, mapping: am };
+      const fm = mapHeaders(headers, FIXTURE_ALIASES);
+      if (fm.kind && fm.col && fm.row && fm.w && fm.h && !found.fixtures) found.fixtures = { sheet: name, rows, mapping: fm };
+      else if (am.col && am.row && am.w && am.h && !found.areas) found.areas = { sheet: name, rows, mapping: am };
       else if (lm.desk && lm.col && lm.row && !found.layout) found.layout = { sheet: name, rows, mapping: lm };
       else if (looksLikePeople && (!found.people || !found.people.looksLikePeople)) { if (found.people) ignored.push(found.people.sheet); found.people = { sheet: name, rows, headers, colMap: cm, autoMap: { ...cm }, dups, looksLikePeople }; }
       else if (!found.people) found.people = { sheet: name, rows, headers, colMap: cm, autoMap: { ...cm }, dups, looksLikePeople };
@@ -2428,6 +2761,18 @@ function planAll(found){
     });
     plan.areas = { sheet: found.areas.sheet, items, created, updated };
   }
+  if (found.fixtures) {
+    const m = found.fixtures.mapping, items = []; let skipped = 0;
+    for (const r of found.fixtures.rows) {
+      const kind = parseFixtureKind(r[m.kind]);
+      const x = parseInt(r[m.col], 10), y = parseInt(r[m.row], 10), w = parseInt(r[m.w], 10) || 0, h = parseInt(r[m.h], 10) || 0;
+      const ok = kind && x >= 0 && y >= 0 && (kind === 'pillar' ? w >= 1 && h >= 1 : w >= 0 && h >= 0 && (w > 0) !== (h > 0));
+      if (!ok) { skipped++; continue; }
+      if (kind === 'pillar') items.push({ kind, x, y, w, h });
+      else items.push({ kind, x1: x, y1: y, x2: x + w, y2: y + h, ...(kind === 'door' ? { swing: (parseInt(r[m.swing], 10) || 0) & 3 } : {}) });
+    }
+    plan.fixtures = { sheet: found.fixtures.sheet, items, skipped, replaces: state.fixtures.size };
+  }
   if (found.people) {
     const m = mappingFrom(found.people.colMap);
     const list = [...finalDesks.values()];
@@ -2473,6 +2818,12 @@ function runImport(){
     for (const it of P.areas.items) setRec('zones', { id: it.id, ...it.data });
     done.push(`${P.areas.items.length} areas`);
   }
+  if (P.fixtures) {
+    // the sheet describes the whole room, so it replaces what's on the map
+    for (const id of [...state.fixtures.keys()]) delRec('fixtures', id);
+    for (const f of P.fixtures.items) setRec('fixtures', { id: uid('f'), ...f });
+    done.push(`${P.fixtures.items.length} walls, doors, windows and pillars`);
+  }
   if (P.people) {
     const fs = fields().map(f => ({ ...f, aliases: [...(f.aliases || [])] }));
     let changed = false; const newKeys = {};
@@ -2516,7 +2867,7 @@ function runImport(){
   }
   // a layout sheet may have just added desks that people from an earlier import were waiting for
   const waited = seatWaiting();
-  closeImport(); state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null;
+  closeImport(); state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null;
   render(true);
   requestAnimationFrame(() => requestAnimationFrame(fitToScreen));
   toast(`Imported ${done.join(', ')}.` + waitNote(waited));
@@ -2543,10 +2894,12 @@ async function exportXlsx(){
       return { 'Desk': d.number, 'Shape': SHAPES[d.shape]?.label || d.shape, 'Column': d.x, 'Row': d.y, 'Rotation': d.rot || 0, 'Seated': p ? p.name : '', 'Seated team': p ? (p.team || '') : '' };
     });
     const areaRows = [...state.zones.values()].map(z => ({ 'Area': z.name, 'Column': z.x, 'Row': z.y, 'Width': z.w, 'Height': z.h }));
+    const roomRows = fixturesSorted().map(f => { const b = fixtureBox(f); return { 'Item': FIX[f.kind], 'Column': b.x, 'Row': b.y, 'Width': b.w, 'Height': b.h, 'Door swing': f.kind === 'door' ? f.swing || 0 : '' }; });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, peopleRows.length ? XLSX.utils.json_to_sheet(peopleRows) : XLSX.utils.aoa_to_sheet([fields().map(f => f.label).concat('Desk')]), 'People');
     XLSX.utils.book_append_sheet(wb, deskRows.length ? XLSX.utils.json_to_sheet(deskRows) : XLSX.utils.aoa_to_sheet([['Desk','Shape','Column','Row','Rotation']]), 'Desks');
     XLSX.utils.book_append_sheet(wb, areaRows.length ? XLSX.utils.json_to_sheet(areaRows) : XLSX.utils.aoa_to_sheet([['Area','Column','Row','Width','Height']]), 'Areas');
+    if (roomRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(roomRows), 'Room');
     const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
     await saveFile('office-desk-map.xlsx', new Blob([out]));
   } catch { toast('Excel export needs an internet connection. Use Data → Download backup to save a copy offline.'); }
@@ -2572,15 +2925,15 @@ function openExport(){
       <p class="sm muted">The plan drawn with Excel cells: each desk is a block of cells with its number and person, coloured by team, set up to print on one page. A second sheet lists every desk. Works offline.</p>
       <div><button class="btn primary" data-exp="xlsxPlan">Download Excel floor plan</button></div></div>
     <div class="impsec"><h3>Excel data (.xlsx)</h3>
-      <p class="sm muted">People, desks and areas on separate sheets. You can edit it and import it again, so it also works as a backup.</p>
+      <p class="sm muted">People, desks, areas and the room (walls, doors, windows, pillars) on separate sheets. You can edit it and import it again, so it also works as a backup.</p>
       <div><button class="btn" data-exp="xlsx">Download Excel data</button></div></div>
     <div class="impsec"><h3>CAD drawing (.dxf)</h3>
-      <p class="sm muted">Opens in AutoCAD, LibreCAD, DraftSight, BricsCAD and most other CAD programs. Desk outlines, desk numbers, names and areas each go on their own layer, drawn to scale in millimetres. In AutoCAD you can then use Save As to get a .dwg.</p>
+      <p class="sm muted">Opens in AutoCAD, LibreCAD, DraftSight, BricsCAD and most other CAD programs. Desk outlines, desk numbers, names, areas, walls, doors, windows and pillars each go on their own layer, drawn to scale in millimetres. In AutoCAD you can then use Save As to get a .dwg.</p>
       <div class="grid2">
         <div class="stack"><label class="l" for="cadSq">Size of one grid square (cm)</label><input class="input mono" id="cadSq" type="number" min="5" max="200" step="1" value="${cadOpts.squareCm}"></div>
         <div class="stack" style="justify-content:flex-end"><span class="sm muted" id="cadHint"></span></div>
       </div>
-      <p class="sm muted">Units are millimetres. Layers: DESKS, DESK-NUMBERS, NAMES, AREAS, AREA-NAMES.</p>
+      <p class="sm muted">Units are millimetres. Layers: DESKS, DESK-NUMBERS, NAMES, AREAS, AREA-NAMES, WALLS, DOORS, WINDOWS, PILLARS.</p>
       <div><button class="btn" data-exp="dxf">Download CAD drawing</button></div></div>
     <div class="row2"><span style="flex:1"></span><button class="btn" data-exp="close">Close</button></div>`;
   updateCadHint();
@@ -2617,14 +2970,14 @@ $('#importDialog').addEventListener('click', async e => {
 async function exportDxf(){
   const o = readCadOpts();
   try {
-    const dxf = buildDXF(desksArr(), [...state.zones.values()], state.people, { squareMM: o.squareCm * 10, names: o.names });
+    const dxf = buildDXF(desksArr(), [...state.zones.values()], state.people, { squareMM: o.squareCm * 10, names: o.names }, fixturesSorted());
     const today = new Date().toISOString().slice(0, 10);
     const readme = [
       'Office Desk Map - CAD export, ' + today,
       '',
       'Open office-desk-map.dxf in AutoCAD, LibreCAD, DraftSight, BricsCAD or another CAD program.',
       'Units: millimetres. One grid square of the map = ' + (o.squareCm * 10) + ' mm.',
-      'Layers: DESKS (outlines), DESK-NUMBERS, NAMES, AREAS (outlines), AREA-NAMES.',
+      'Layers: DESKS (outlines), DESK-NUMBERS, NAMES, AREAS (outlines), AREA-NAMES, WALLS, DOORS, WINDOWS, PILLARS.',
       'The top of the map is the top of the drawing.'
     ].join('\r\n');
     void readme;
@@ -2681,6 +3034,10 @@ function planSVG(names){
     const txt = (str, dy, size, font, color) => `<text x="${cx}" y="${r2(cy + dy)}" font-family="${font}" font-size="${r2(size)}" font-weight="600" fill="#${color}" text-anchor="middle" dominant-baseline="central"${fit(str, size)}>${esc(str)}</text>`;
     const lines = name ? txt(d.number, -.27 * S, .42 * S, MONO, MUTED_HEX) + txt(name, .3 * S, .5 * S, FONT, INK_HEX) : txt(d.number, 0, .55 * S, MONO, INK_HEX);
     out.push(d.shape === 'v' ? `<g transform="rotate(-90 ${cx} ${cy})">${lines}</g>` : lines);
+  }
+  if (state.fixtures.size) {
+    const c = { ink: '#' + INK_HEX, paper: '#ffffff', pillar: '#' + tint(INK_HEX, .3) };
+    out.push(`<g transform="translate(${ox} ${oy}) scale(${S})">${fixturesSorted().map(f => fixtureSVG(f, c)).join('')}</g>`);
   }
   for (const z of zs) out.push(`<text x="${ox + z.x * S + 12}" y="${oy + z.y * S}" font-size="13" font-weight="700" letter-spacing="1" fill="#${ACCENT_HEX}" dominant-baseline="central" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">${esc((z.name || 'Area').toUpperCase())}</text>`);
   for (const it of legend) {
@@ -2791,14 +3148,33 @@ function buildPlanXlsx(names){
   };
   const ds = desksArr().sort(byNumber), zs = [...state.zones.values()];
   const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
+  // walls, windows and doors are borders along the cell edges they run on; wb() adds them to a square's own borders
+  const edgeLines = new Map(), LINE = { wall: ['thick', INK_HEX], window: ['double', INK_HEX], door: ['hair', MUTED_HEX] };
+  const addEdge = (x, y, side, line) => { const k = x + ',' + y; edgeLines.set(k, { ...edgeLines.get(k), [side]: line }); };
+  for (const f of fixturesSorted()) if (isSeg(f)) for (const [o, x, y] of segEdges(f)) {
+    if (o === 'h') { addEdge(x, y, 't', LINE[f.kind]); addEdge(x, y - 1, 'b', LINE[f.kind]); }
+    else { addEdge(x, y, 'l', LINE[f.kind]); addEdge(x - 1, y, 'r', LINE[f.kind]); }
+  }
+  const wb = (x, y, b) => ({ ...b, ...edgeLines.get(x + ',' + y) });
   put(0, 1, { s: st.style({ font: { b: 1, sz: 14, color: INK_HEX } }), v: txt('Office Desk Map') });
   put(1, 1, { s: st.style({ font: { sz: 9, color: MUTED_HEX } }), v: txt(`${new Date().toISOString().slice(0, 10)} · ${ds.length} desks · ${seated} seated · ${ds.length - seated} free`) });
   // areas: a light tint under the desks, with the name in the first free square of the top row
   const deskSquares = new Set(ds.flatMap(d => cellsOf(d.shape, d.rot || 0, d.x, d.y)));
   const zoneFill = tint(ACCENT_HEX, .08), zoneStyle = st.style({ fill: zoneFill });
   for (const z of zs) {
-    for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + y)) put(R(y), C(x), { s: zoneStyle });
-    for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + z.y)) { put(R(z.y), C(x), { s: st.style({ fill: zoneFill, font: { b: 1, sz: 8, color: ACCENT_HEX } }), v: txt((z.name || 'Area').toUpperCase()) }); break; }
+    for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + y)) put(R(y), C(x), { s: edgeLines.has(x + ',' + y) ? st.style({ fill: zoneFill, border: wb(x, y) }) : zoneStyle });
+    for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + z.y)) { put(R(z.y), C(x), { s: st.style({ fill: zoneFill, border: wb(x, z.y), font: { b: 1, sz: 8, color: ACCENT_HEX } }), v: txt((z.name || 'Area').toUpperCase()) }); break; }
+  }
+  // pillars: dark squares, under the desks so a desk drawn on one still shows its number
+  const pillarFill = tint(INK_HEX, .45);
+  for (const f of state.fixtures.values()) if (f.kind === 'pillar') for (const k of boxCells(f.x, f.y, f.w, f.h)) {
+    const [x, y] = k.split(',').map(Number);
+    put(R(y), C(x), { s: st.style({ fill: pillarFill, border: wb(x, y) }) });
+  }
+  // squares with only a wall along them
+  for (const k of edgeLines.keys()) {
+    const [x, y] = k.split(',').map(Number);
+    if (!cells.has(R(y) + ',' + C(x)) && R(y) >= 2 && C(x) >= 0) put(R(y), C(x), { s: st.style({ border: wb(x, y) }) });
   }
   for (const d of ds) {
     const rot = d.rot || 0, p = d.personId ? state.people.get(d.personId) : null, hex = p ? teamHex(p.team) : FREE_HEX;
@@ -2815,7 +3191,7 @@ function buildPlanXlsx(names){
       if (!own.has((x + 1) + ',' + y)) b.r = line;
       if (!own.has(x + ',' + (y - 1))) b.t = line;
       if (!own.has(x + ',' + (y + 1))) b.b = line;
-      const s = st.style({ fill, border: b, font: { sz: 8 }, al: { h: 'center', v: 'center', wrap: 1, rot: d.shape === 'v' ? 90 : 0 } });
+      const s = st.style({ fill, border: wb(x, y, b), font: { sz: 8 }, al: { h: 'center', v: 'center', wrap: 1, rot: d.shape === 'v' ? 90 : 0 } });
       put(R(y), C(x), { s, v: x === lab.x && y === lab.y ? v : '' });
     }
     merge(lab.x, lab.y, lab.w, lab.h);
@@ -2864,14 +3240,14 @@ function dxfShortName(name){
   if (parts.length < 2) return parts[0] || '';
   return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
 }
-function buildDXF(desks, zones, people, opts){
+function buildDXF(desks, zones, people, opts, fixtures = []){
   const S = opts.squareMM;
   const out = [];
   const g = (code, val) => { out.push(String(code), String(val)); };
   const r3 = v => Math.round(v * 1000) / 1000;
   const P = (x, y) => [r3(x * S), r3(-y * S)]; // map grid (y down) to drawing (y up)
   const SIZE = { h: [4, 2], v: [2, 4], corner: [4, 4] };
-  const layers = [['DESKS', 7], ['DESK-NUMBERS', 1], ['NAMES', 5], ['AREAS', 8], ['AREA-NAMES', 8]];
+  const layers = [['DESKS', 7], ['DESK-NUMBERS', 1], ['NAMES', 5], ['AREAS', 8], ['AREA-NAMES', 8], ['WALLS', 7], ['DOORS', 3], ['WINDOWS', 4], ['PILLARS', 8]];
 
   g(0, 'SECTION'); g(2, 'HEADER');
   g(9, '$ACADVER'); g(1, 'AC1009');
@@ -2900,6 +3276,29 @@ function buildDXF(desks, zones, people, opts){
     if (rot) g(50, rot);
     g(72, h); g(11, x); g(21, y); g(31, 0); g(73, v);
   };
+
+  const line = (layer, [x1, y1], [x2, y2]) => { g(0, 'LINE'); g(8, layer); g(10, x1); g(20, y1); g(30, 0); g(11, x2); g(21, y2); g(31, 0); };
+  // a wall or window as an outline WALL thick, centred on its grid line and running past each end by half that
+  const band = (layer, f, t) => {
+    const hz = f.y1 === f.y2, e = t / 2;
+    poly(layer, hz ? [P(f.x1 - e, f.y1 - e), P(f.x2 + e, f.y1 - e), P(f.x2 + e, f.y1 + e), P(f.x1 - e, f.y1 + e)]
+      : [P(f.x1 - e, f.y1 - e), P(f.x1 + e, f.y1 - e), P(f.x1 + e, f.y2 + e), P(f.x1 - e, f.y2 + e)]);
+  };
+  for (const f of fixtures) {
+    if (f.kind === 'pillar') {
+      poly('PILLARS', [P(f.x, f.y), P(f.x + f.w, f.y), P(f.x + f.w, f.y + f.h), P(f.x, f.y + f.h)]);
+      line('PILLARS', P(f.x, f.y), P(f.x + f.w, f.y + f.h)); line('PILLARS', P(f.x + f.w, f.y), P(f.x, f.y + f.h));
+    } else if (f.kind === 'wall') band('WALLS', f, WALL);
+    else if (f.kind === 'window') { band('WINDOWS', f, WALL); line('WINDOWS', P(f.x1, f.y1), P(f.x2, f.y2)); }
+    else {
+      // the open leaf and the quarter circle it swings through; DXF arcs run anticlockwise, with y pointing up
+      const d = doorGeom(f), [hx, hy] = P(...d.hinge);
+      line('DOORS', P(...d.hinge), P(...d.leaf));
+      const ang = ([x, y]) => { const [px, py] = P(x, y); return (Math.round(Math.atan2(py - hy, px - hx) * 180 / Math.PI) + 360) % 360; };
+      const a1 = ang(d.other), a2 = ang(d.leaf), ccw = (a2 - a1 + 360) % 360 === 90;
+      g(0, 'ARC'); g(8, 'DOORS'); g(10, hx); g(20, hy); g(30, 0); g(40, r3(d.L * S)); g(50, ccw ? a1 : a2); g(51, ccw ? a2 : a1);
+    }
+  }
 
   for (const z of zones) {
     poly('AREAS', [P(z.x, z.y), P(z.x + z.w, z.y), P(z.x + z.w, z.y + z.h), P(z.x, z.y + z.h)]);
@@ -2984,15 +3383,15 @@ function sync(){
 }
 function snapshot(){
   const rows = m => [...m.values()].map(r => ({ ...r }));
-  return { app: 'office-desk-map', version: 1, savedAt: new Date().toISOString(), desks: rows(state.desks), people: rows(state.people), zones: rows(state.zones), settings: rows(state.settings) };
+  return { app: 'office-desk-map', version: 1, savedAt: new Date().toISOString(), desks: rows(state.desks), people: rows(state.people), zones: rows(state.zones), fixtures: rows(state.fixtures), settings: rows(state.settings) };
 }
 function validSnapshot(d){ return d && Array.isArray(d.desks) && Array.isArray(d.people); }
 function applySnapshot(d){
   if (!validSnapshot(d)) throw new Error('format');
   const m = arr => new Map((arr || []).filter(r => r && r.id != null).map(r => [String(r.id), { ...r, id: String(r.id) }]));
-  state.desks = m(d.desks); state.people = m(d.people); state.zones = m(d.zones); state.settings = m(d.settings);
+  state.desks = m(d.desks); state.people = m(d.people); state.zones = m(d.zones); state.fixtures = m(d.fixtures); state.settings = m(d.settings);
   clearHistory(); // undoing back into a different map would be confusing
-  state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; state.didFit = false; state.fieldsDraft = null; if (state.panelMode === 'fields') state.panelMode = null;
+  state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; state.didFit = false; state.fieldsDraft = null; if (state.panelMode === 'fields') state.panelMode = null;
 }
 function lsGet(k){ try { return localStorage.getItem(k); } catch { store.lsOk = false; return null; } }
 function lsSet(k, v){ try { localStorage.setItem(k, v); store.lsOk = true; return true; } catch { store.lsOk = false; return false; } }

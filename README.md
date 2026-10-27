@@ -38,6 +38,14 @@ These can't write to files directly. The map saves in the browser instead, and t
 - **When you import**, each Excel column has a dropdown showing where it goes. You can change it, skip a column, or add it as a new field. Your choices are remembered for next time.
 - **Where it's kept:** the field setup is saved inside `desk-map-data.json` with everything else.
 
+## Walls, doors, windows and pillars
+
+- Turn on **Arrange desks** and use the **Room** tools. **Wall**, **Door** and **Window** draw straight lines along the grid lines: drag from one corner to another. Click Door or Window once on the map for a standard 2-square one. Press **Esc** when you're done drawing.
+- **Pillar**: drag it from the toolbar onto the map (or click to add one), then drag its round handle to make it bigger.
+- Click any of them to move it, drag its handles, nudge it with the arrow keys, flip a door's swing, or press **Delete** to remove it.
+- They never stop you from placing a desk. A desk that sits on a pillar, crosses a wall or stands where a door swings gets an orange outline and a **!** badge, and the header counts them. Desks added with a click, a row or a paste avoid those spots by themselves.
+- They show up in every export. In the Excel data workbook they're on the **Room** sheet (a wall across has a Height of 0); importing a workbook with that sheet replaces the room on the map.
+
 ## Good to know
 
 - **Internet:** Excel import and export load a spreadsheet library from the internet, so they need a connection. Everything else, including the CAD (.dxf) export and JSON backups, works offline.
