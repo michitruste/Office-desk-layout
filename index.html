@@ -1,0 +1,2361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Office Desk Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: the floor plan is a drafting sheet on the left; the desk/person ledger sits on the right. Stacks on phones. */
+:root{
+  --paper:#eceff0; --sheet:#f7f9f9; --surface:#ffffff; --ink:#1a2529; --muted:#5b6a6f;
+  --line:#d3dbdd; --line-strong:#9aa8ad; --grid:#e2e8ea; --grid-major:#d2dadd;
+  --accent:#2453a6; --accent-ink:#ffffff; --accent-soft:#e3ebf8;
+  --danger:#b23a2e; --danger-soft:#fbe9e6; --ok:#2c7650; --ok-soft:#e2f2e9; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --shadow:rgba(20,35,45,.16); --scrim:rgba(18,26,30,.45);
+  --t0:#c4561c; --t1:#2c7a4e; --t2:#7a49b3; --t3:#0e7b8a; --t4:#b52f6b; --t5:#8c6a0f; --t6:#3a5fc6; --t7:#5f7322;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111719; --sheet:#161e21; --surface:#1d272b; --ink:#e4ecee; --muted:#9aabb0;
+    --line:#2e3b40; --line-strong:#5d6f75; --grid:#1d272a; --grid-major:#263337;
+    --accent:#7da4ec; --accent-ink:#0d1a30; --accent-soft:#1f2c44;
+    --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
+    --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
+    --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111719; --sheet:#161e21; --surface:#1d272b; --ink:#e4ecee; --muted:#9aabb0;
+  --line:#2e3b40; --line-strong:#5d6f75; --grid:#1d272a; --grid-major:#263337;
+  --accent:#7da4ec; --accent-ink:#0d1a30; --accent-soft:#1f2c44;
+  --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
+  --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
+  --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
+  color-scheme:dark;
+}
+
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-rows:auto auto minmax(0,1fr);height:100%;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:0 16px;gap:12px}
+
+/* Header */
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:14px 0}
+.brand{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:0}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spacing:.01em;line-height:1;margin:0;text-wrap:balance}
+.stats{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:4px 12px}
+.stats b{color:var(--ink);font-weight:600}
+.stats .warn b{color:var(--warn)}
+.savechip{align-self:flex-start;margin-top:4px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-family:var(--f-mono);font-size:11px;color:var(--ok);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.savechip.warn{color:var(--warn);border-color:color-mix(in srgb, var(--warn) 40%, var(--line))}
+.search{position:relative;flex:1 1 260px;max-width:380px}
+.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted);pointer-events:none}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;line-height:1.2}
+.btn:hover{border-color:var(--line-strong)}
+.btn svg{width:16px;height:16px;flex:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb, var(--danger) 40%, var(--line))}
+.btn.danger.solid{background:var(--danger);color:var(--surface);border-color:var(--danger)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:var(--accent-soft)}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* Notices */
+.notices{display:flex;flex-direction:column;gap:8px;min-width:0}
+.notice{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:9px 14px;border-radius:8px;background:var(--warn-soft);color:var(--ink);font-size:14px;border:1px solid color-mix(in srgb, var(--warn) 25%, transparent)}
+.notice p{margin:0;flex:1 1 280px;min-width:0}
+.notice .row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Work area */
+.work{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:14px;min-height:0}
+.sheet{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--sheet);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
+.tools .lab{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tools .hint{color:var(--muted);font-size:14px}
+.tools .sep{width:1px;height:24px;background:var(--line)}
+.tools .spacer{flex:1}
+.zoom{display:flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.zoom button{border:0;background:transparent;min-width:32px;height:32px;cursor:pointer;font-size:18px;font-weight:600;border-radius:7px;padding:0 6px}
+.zoom button.fit{font-size:13px;border-left:1px solid var(--line);border-radius:0 7px 7px 0;padding:0 10px}
+.zoom button:hover{background:var(--accent-soft)}
+.zoom span{font-family:var(--f-mono);font-size:12px;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.confirmbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;padding-top:4px;font-size:14px}
+
+.scroll{flex:1;min-height:0;overflow:auto;position:relative;overscroll-behavior:contain}
+.plan{position:relative;--u:22px;margin:calc(var(--u)*.5);
+  background-color:var(--sheet);
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:calc(var(--u)*4) calc(var(--u)*4),calc(var(--u)*4) calc(var(--u)*4),var(--u) var(--u),var(--u) var(--u);
+  border:1px solid var(--line)}
+.plan.tiny{background-image:linear-gradient(var(--grid-major) 1px, transparent 1px),linear-gradient(90deg, var(--grid-major) 1px, transparent 1px);background-size:calc(var(--u)*4) calc(var(--u)*4)}
+.plan.arrange{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.plan-msg{position:absolute;left:16px;top:16px;width:min(460px, calc(100vw - 80px));padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;gap:10px;z-index:4}
+.plan-msg h2{font-family:var(--f-display);font-size:22px;margin:0}
+.plan-msg p{margin:0;color:var(--muted)}
+
+/* Areas */
+/* each area is drawn twice: its tint sits under the desks, its outline, name and resize handle sit over them */
+.zone,.zone-top{position:absolute;left:calc(var(--x)*var(--u));top:calc(var(--y)*var(--u));width:calc(var(--w)*var(--u));height:calc(var(--h)*var(--u));border-radius:6px;pointer-events:none}
+.zone{background:color-mix(in srgb, var(--accent) 5%, transparent);z-index:0}
+.zone.selected{background:color-mix(in srgb, var(--accent) 10%, transparent)}
+.zone-top{border:1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);z-index:4}
+.zone-top.selected{border-style:solid;border-color:var(--accent);z-index:5}
+.zlabel{position:absolute;left:calc(var(--u)*.5);top:0;transform:translateY(-50%);padding:0 6px;background:var(--sheet);border:0;border-radius:4px;
+  font-family:var(--f-display);font-weight:700;font-size:max(11px, calc(var(--u)*.6));letter-spacing:.06em;text-transform:uppercase;color:var(--accent);white-space:nowrap;line-height:1.3;pointer-events:none;max-width:calc(100% - var(--u))}
+.plan.arrange .zlabel{pointer-events:auto;cursor:move;touch-action:none;outline:1px dashed color-mix(in srgb, var(--accent) 50%, transparent)}
+.zhandle{position:absolute;right:-11px;bottom:-11px;width:22px;height:22px;border-radius:50%;background:var(--accent);border:3px solid var(--sheet);box-shadow:0 1px 4px var(--shadow);pointer-events:auto;cursor:nwse-resize;touch-action:none}
+.zhandle::after{content:"";position:absolute;inset:-8px}
+
+/* Desks */
+.desk{position:absolute;left:calc(var(--x)*var(--u));top:calc(var(--y)*var(--u));width:calc(var(--w)*var(--u));height:calc(var(--h)*var(--u));
+  cursor:pointer;--tc:var(--line-strong);-webkit-tap-highlight-color:transparent;outline:none;z-index:1}
+.desk svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.desk .shape{fill:color-mix(in srgb, var(--tc) 17%, var(--surface));stroke:var(--tc);stroke-width:1.5;vector-effect:non-scaling-stroke;stroke-linejoin:round;transition:fill .15s}
+.desk.free .shape{fill:var(--surface);stroke:var(--line-strong);stroke-dasharray:4 3}
+.desk:hover .shape{fill:color-mix(in srgb, var(--tc) 28%, var(--surface))}
+.desk.free:hover .shape{fill:var(--accent-soft)}
+.desk.selected{z-index:3}
+.desk.selected .shape{stroke:var(--accent);stroke-width:2.75;stroke-dasharray:none;fill:color-mix(in srgb, var(--accent) 16%, var(--surface))}
+.desk.selected.single .shape{stroke:var(--ink);fill:color-mix(in srgb, var(--tc) 17%, var(--surface))}
+.desk.selected.single.free .shape{fill:var(--surface)}
+.desk.selected.single svg{filter:drop-shadow(0 3px 6px var(--shadow))}
+.desk:focus-visible .shape{stroke:var(--accent);stroke-width:3}
+.plan.searching .desk:not(.hit){opacity:.25}
+.plan.searching .desk.hit .shape{stroke:var(--accent);stroke-width:2.5}
+.plan.arrange .desk{cursor:grab;touch-action:none}
+.desk.dragging{z-index:6;cursor:grabbing;opacity:.92}
+.desk.blocked .shape{stroke:var(--danger);fill:var(--danger-soft)}
+.lbl{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:0 calc(var(--u)*.3);overflow:hidden;pointer-events:none;line-height:1.1;user-select:none;-webkit-user-select:none}
+.lbl.top{bottom:50%}
+.lbl.bottom{top:50%}
+.lbl.vert{writing-mode:vertical-rl;transform:rotate(180deg);padding:calc(var(--u)*.3) 0;align-items:center}
+.lbl .num{font-family:var(--f-mono);font-weight:600;font-size:max(8px, calc(var(--u)*.44));color:var(--muted);letter-spacing:.02em}
+.lbl .nm{font-weight:600;font-size:max(9px, calc(var(--u)*.56));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.desk.free .lbl .nm{color:var(--muted);font-weight:500;font-style:italic}
+/* zoomed out: names give way so the desk number always stays readable */
+.plan.small .lbl .nm,.plan.tiny .lbl .nm{display:none}
+.plan.small .lbl,.plan.tiny .lbl{align-items:center}
+.plan.small .lbl .num{font-size:max(8px, calc(var(--u)*.62));color:var(--ink)}
+.plan.tiny .lbl{padding:0}
+.plan.tiny .lbl .np{display:none}
+.plan.tiny .lbl .num{font-size:max(7px, calc(var(--u)*.95));color:var(--ink);letter-spacing:0}
+.marquee{position:absolute;border:1.5px solid var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent);pointer-events:none;z-index:8}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--line);background:var(--surface)}
+.legend:empty{display:none}
+.chipbtn{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);border-radius:99px;background:transparent;font-size:13px;cursor:pointer}
+.chipbtn:hover{border-color:var(--line-strong)}
+.chipbtn .n{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:3px;background:var(--tc, var(--line-strong));flex:none}
+
+/* Panel */
+.panel{display:flex;flex-direction:column;min-height:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;padding:11px 8px;border:0;background:transparent;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .n{font-family:var(--f-mono);font-size:12px;font-weight:500;margin-left:4px}
+.pbody{flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.dhead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.dnum{font-family:var(--f-display);font-weight:700;font-size:40px;line-height:.9;letter-spacing:.01em;overflow-wrap:anywhere}
+.pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:600}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.free{background:var(--accent-soft);color:var(--accent)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.mono{font-family:var(--f-mono);font-weight:600;background:var(--sheet);border:1px solid var(--line)}
+.stack{display:flex;flex-direction:column;gap:6px}
+.row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label.l{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.03em}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.check input{width:16px;height:16px;accent-color:var(--accent)}
+.input,select.input,textarea.input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface);min-width:0}
+textarea.input{min-height:76px;resize:vertical}
+.input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.mono{font-family:var(--f-mono);font-size:.92em}
+.card{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card-top{display:flex;gap:12px;align-items:center;padding:14px;background:color-mix(in srgb, var(--tc, var(--line-strong)) 10%, var(--surface));border-bottom:1px solid var(--line)}
+.avatar{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:18px;background:var(--tc, var(--line-strong));color:var(--surface);flex:none}
+.card-top .who{flex:1;min-width:0}
+.card-top .nm{font-weight:700;font-size:17px;line-height:1.2;overflow-wrap:anywhere}
+.card-top .tm{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.facts{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:0}
+.facts dt,.facts dd{padding:8px 14px;border-bottom:1px solid var(--line);margin:0}
+.facts dt{font-size:12px;font-weight:600;color:var(--muted);padding-right:6px;white-space:nowrap}
+.facts dd{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;overflow-wrap:anywhere;font-size:14px}
+.facts dd .empty{color:var(--muted)}
+.facts > :nth-last-child(-n+2){border-bottom:0}
+.copy{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:3px;border-radius:5px;flex:none;display:grid;place-items:center}
+.copy:hover{color:var(--accent);background:var(--accent-soft)}
+.copy svg{width:15px;height:15px}
+.notes{padding:12px 14px;border-top:1px solid var(--line);font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+.sm{font-size:13px}
+.err{color:var(--danger);font-size:13px}
+.empty-note{padding:14px;border:1px dashed var(--line-strong);border-radius:10px;color:var(--muted);font-size:14px}
+.box{padding:12px;border-radius:10px;background:var(--sheet);border:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.box h3{margin:0;font-size:12px;font-family:var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.confirm{padding:10px 12px;border-radius:8px;background:var(--danger-soft);display:flex;flex-direction:column;gap:8px;font-size:14px}
+.nudge{display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,36px);gap:4px;align-self:flex-start}
+.nudge button{border:1px solid var(--line);background:var(--surface);border-radius:7px;cursor:pointer;font-size:16px;font-weight:700}
+.nudge button:hover{border-color:var(--accent);color:var(--accent)}
+.nudge span{display:grid;place-items:center;font-family:var(--f-mono);font-size:10px;color:var(--muted)}
+.fieldrow{gap:8px}
+.btn.ghost.danger{color:var(--danger)}
+.maptable td{vertical-align:middle}
+.maptable select.input{min-width:180px;padding:5px 8px}
+.maptable .ex{max-width:150px;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.maptable .err,.maptable .hint{white-space:normal;max-width:220px;margin-top:4px;font-size:12px}
+.maptable .hint{color:var(--warn)}
+@media (max-width: 560px){ .maptable .ex,.maptable th:nth-child(2){display:none} .maptable select.input{min-width:150px} }
+.rowpreview{font-family:var(--f-mono);font-size:12px;color:var(--muted);padding:8px 10px;border-radius:7px;background:var(--surface);border:1px solid var(--line)}
+
+.plist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.plist li + li{border-top:1px solid var(--line)}
+.prow{width:100%;display:flex;align-items:center;gap:10px;padding:9px 4px;border:0;background:transparent;text-align:left;cursor:pointer;border-radius:6px}
+.prow:hover{background:var(--accent-soft)}
+.prow .avatar{width:32px;height:32px;font-size:14px;border-radius:8px}
+.prow .who{flex:1;min-width:0}
+.prow .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .tm{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.overview{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ov{padding:10px;border:1px solid var(--line);border-radius:8px}
+.ov b{display:block;font-family:var(--f-display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.ov span{font-size:12px;color:var(--muted)}
+.teamlist{display:flex;flex-direction:column;gap:4px}
+.teamlist .chipbtn{justify-content:flex-start;border-radius:7px;width:100%;padding:6px 9px}
+.teamlist .chipbtn .n{margin-left:auto}
+
+.form{display:flex;flex-direction:column;gap:12px}
+.form .f{display:flex;flex-direction:column;gap:4px}
+.form .req{color:var(--danger)}
+.form-actions{display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:-16px;background:var(--surface);padding-block:10px;margin-bottom:-6px;border-top:1px solid var(--line)}
+
+/* Import sheet */
+.overlay{position:fixed;inset:0;z-index:40;background:var(--scrim);display:flex;align-items:center;justify-content:center;
+  padding:max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))}
+.dialog{background:var(--surface);border-radius:12px;width:100%;max-width:700px;max-height:100%;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 50px var(--shadow)}
+.dialog h2{margin:0;font-family:var(--f-display);font-size:26px}
+.dialog h3{margin:0;font-size:16px}
+.dialog p{margin:0}
+.drop{border:2px dashed var(--line-strong);border-radius:10px;padding:22px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.maplist{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;font-size:13px}
+.maplist div{padding:6px 9px;border-radius:6px;background:var(--sheet);border:1px solid var(--line);min-width:0;overflow-wrap:anywhere}
+.maplist .k{font-weight:600}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table.pv{border-collapse:collapse;font-size:13px;min-width:100%}
+table.pv th,table.pv td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.pv th{background:var(--sheet);font-weight:600;color:var(--muted)}
+.sumrow{display:flex;flex-wrap:wrap;gap:8px}
+.impsec{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:10px}
+.helpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.helpgrid .box p{font-size:13px;color:var(--muted)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom, 0px));z-index:50;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:9px;font-size:14px;box-shadow:0 8px 24px var(--shadow);max-width:calc(100% - 32px)}
+
+@media (max-width: 880px){
+  html,body{height:auto}
+  .app{height:auto}
+  .work{grid-template-columns:1fr}
+  .scroll{height:auto;flex:none;overflow-x:auto;overflow-y:hidden;overscroll-behavior:auto;overscroll-behavior-x:contain}
+  .panel{min-height:auto}
+  .pbody{overflow:visible}
+  .search{max-width:none;flex-basis:100%;order:3}
+  .form-actions{bottom:0}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;scroll-behavior:auto!important} }
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <h1>Office Desk Map</h1>
+      <div class="stats" id="stats"><span>Loading…</span></div>
+      <button class="savechip" id="saveChip" data-act="openData">Saved in this browser</button>
+    </div>
+    <label class="search" for="q">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Find a person, team, desk or computer tag" autocomplete="off" aria-label="Search">
+    </label>
+    <div class="actions">
+      <button class="btn" id="arrangeBtn" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9 2 12l3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+        <span>Arrange desks</span>
+      </button>
+      <button class="btn" data-act="openData">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Data
+      </button>
+      <button class="btn" id="importBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+        Import
+      </button>
+      <button class="btn" id="exportBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9M7 14l5-5 5 5M4 3h16"/></svg>
+        Export
+      </button>
+    </div>
+  </header>
+
+  <div class="notices" id="notices"></div>
+
+  <main class="work">
+    <section class="sheet" aria-label="Floor plan">
+      <div class="tools" id="tools"></div>
+      <div class="scroll" id="scroll">
+        <div class="plan" id="plan"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+    <aside class="panel" id="panel" aria-label="Details">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tabDesk" aria-selected="true" data-tab="desk">Desk</button>
+        <button role="tab" id="tabPeople" aria-selected="false" data-tab="people">People<span class="n" id="peopleCount"></span></button>
+      </div>
+      <div class="pbody" id="pbody"></div>
+    </aside>
+  </main>
+</div>
+
+<div class="overlay" id="importOverlay" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="impTitle" id="importDialog"></div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- constants ---------- */
+const U_BASE = 22;
+const ZOOMS = [0.25, 0.35, 0.5, 0.6, 0.75, 0.9, 1, 1.15, 1.3, 1.5, 1.75];
+const SHAPES = {
+  h: { w: 4, h: 2, label: 'Horizontal' },
+  v: { w: 2, h: 4, label: 'Vertical' },
+  corner: { w: 4, h: 4, label: 'Corner' }
+};
+/* People fields. Each map keeps its own editable copy (the Fields screen); this is the starting set. */
+const KINDS = { text: 'Text', code: 'ID or code', email: 'Email', date: 'Date', long: 'Long text' };
+function kindOf(f){ return f.textarea ? 'long' : f.type === 'date' ? 'date' : f.type === 'email' ? 'email' : f.mono ? 'code' : 'text'; }
+function makeField(k, label, kind, extra = {}){
+  const o = { k, label, aliases: extra.aliases || [] };
+  if (extra.req) o.req = true;
+  if (extra.match) o.match = true;
+  if (kind === 'code') { o.mono = true; o.copy = true; }
+  else if (kind === 'email') { o.type = 'email'; o.copy = true; }
+  else if (kind === 'date') o.type = 'date';
+  else if (kind === 'long') o.textarea = true;
+  else if (k !== 'name') o.list = true;
+  return o;
+}
+const DEFAULT_FIELDS = [
+  makeField('name', 'Full name', 'text', { req: true, match: true, aliases: ['Name', 'Employee name', 'Employee', 'Person', 'Nombre', 'Nombre completo', 'Colaborador'] }),
+  makeField('employeeId', 'Employee ID', 'code', { match: true, aliases: ['ID', 'Emp ID', 'Employee number', 'Employee no', 'Staff ID', 'Badge', 'Badge ID', 'ID empleado', 'Numero empleado', 'Cedula'] }),
+  makeField('customerId', 'Customer ID', 'code', { match: true, aliases: ['Client ID', 'ID cliente', 'Customer number', 'Client number', 'Customer employee ID', 'Client employee ID', 'Account ID'] }),
+  makeField('email', 'Email', 'email', { match: true, aliases: ['Email address', 'Mail', 'Work email', 'Correo', 'Correo electronico'] }),
+  makeField('team', 'Team', 'text', { aliases: ['Department', 'Dept', 'Area', 'Equipo', 'Departamento'] }),
+  makeField('supervisor', 'Supervisor', 'text', { aliases: ['Manager', 'Reports to', 'Jefe'] }),
+  makeField('companyTeamLead', 'Company team lead', 'text', { aliases: ['Team lead', 'Company lead', 'TL', 'Lider', 'Lider de equipo'] }),
+  makeField('customerTeamLead', 'Customer team lead', 'text', { aliases: ['Client team lead', 'Customer lead', 'Client lead', 'Lider cliente'] }),
+  makeField('customerSupervisor', 'Customer supervisor', 'text', { aliases: ['Client supervisor', 'Supervisor cliente'] }),
+  makeField('computerTag', 'Computer tag', 'code', { aliases: ['Asset tag', 'PC tag', 'Computer', 'Laptop tag', 'Laptop', 'Tag', 'Computer ID', 'Equipo computo', 'Serial', 'Hostname'] }),
+  makeField('startDate', 'Start date', 'date', { aliases: ['Start', 'Hire date', 'Date started', 'Join date', 'Fecha ingreso', 'Fecha de ingreso'] }),
+  makeField('notes', 'Notes', 'long', { aliases: ['Note', 'Comments', 'Comment', 'Notas', 'Observaciones'] })
+];
+function fields(){ const d = state.settings.get('fields'); return d && Array.isArray(d.fields) && d.fields.some(f => f.k === 'name') ? d.fields : DEFAULT_FIELDS; }
+function fieldNames(f){ return [f.label, ...(f.aliases || [])].map(norm).filter(Boolean); }
+function saveFields(list){ setRec('settings', { id: 'fields', fields: JSON.parse(JSON.stringify(list)) }); }
+const NAME_PART_ALIASES = { firstName: ['firstname', 'first', 'givenname', 'nombres'], lastName: ['lastname', 'last', 'surname', 'familyname', 'apellido', 'apellidos'] };
+const DESK_ALIASES = ['desk', 'desknumber', 'deskno', 'table', 'tablenumber', 'seat', 'seatnumber', 'puesto', 'escritorio', 'mesa'];
+const LAYOUT_ALIASES = {
+  desk: DESK_ALIASES,
+  shape: ['shape','type','desktype','forma','tipo'],
+  col: ['column','col','x','columna','left'],
+  row: ['row','y','fila','top'],
+  rot: ['rotation','rot','angle','rotacion','orientation']
+};
+const AREA_ALIASES = {
+  area: ['area','zone','zona','areaname','zonename','name','nombre'],
+  col: LAYOUT_ALIASES.col, row: LAYOUT_ALIASES.row,
+  w: ['width','w','ancho','columns'],
+  h: ['height','h','alto','rows']
+};
+
+/* ---------- state ---------- */
+const state = {
+  desks: new Map(), people: new Map(), zones: new Map(), settings: new Map(), fieldsDraft: null,
+  loaded: false, local: false, readOnly: false,
+  sel: new Set(), selectedZone: null, selectedPerson: null,
+  tab: 'desk', arrange: false, multi: false, query: '',
+  zoom: window.innerWidth < 880 ? 0.6 : 1,
+  editing: null,      // {id, deskId}: person form
+  panelMode: null,    // 'addRow'
+  confirm: null,
+  didFit: false
+};
+let downloads = true, drag = null, renderPending = false, forcePanelNext = false, needsRenderAfterDrag = false;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = p => p + '_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g,'').slice(0,14) : Math.random().toString(36).slice(2,16));
+const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const byNumber = (a, b) => String(a.number).localeCompare(String(b.number), undefined, { numeric: true });
+const deskEl = id => planEl.querySelector(`.desk[data-id="${CSS.escape(id)}"]`);
+
+/* ---------- derived helpers ---------- */
+function desksArr(){ return [...state.desks.values()]; }
+function peopleArr(){ return [...state.people.values()].sort((a,b) => (a.name||'').localeCompare(b.name||'')); }
+function single(){ return state.sel.size === 1 ? state.sel.values().next().value : null; }
+function seatIndex(){
+  const m = new Map();
+  for (const d of state.desks.values()) if (d.personId && state.people.has(d.personId)) m.set(d.personId, d);
+  return m;
+}
+function teams(){
+  const m = new Map();
+  for (const p of state.people.values()) { const t = (p.team||'').trim(); if (t) m.set(t, (m.get(t)||0)+1); }
+  return [...m.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+}
+let teamColorCache = new Map();
+function rebuildTeamColors(){ teamColorCache = new Map(teams().map(([t], i) => [t.toLowerCase(), i % 8])); }
+function teamVar(team){
+  const i = teamColorCache.get((team||'').trim().toLowerCase());
+  return i === undefined ? 'var(--line-strong)' : `var(--t${i})`;
+}
+function initials(name){
+  const parts = String(name||'?').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return ((parts[0][0]||'') + (parts.length > 1 ? parts[parts.length-1][0] : '')).toUpperCase();
+}
+function shortName(name){
+  const parts = String(name||'').trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] || '';
+  return parts[0] + ' ' + parts[parts.length-1][0] + '.';
+}
+function inShape(shape, rot, c, r){
+  if (shape !== 'corner') return true;
+  switch (rot) {
+    case 90: return r < 2 || c >= 2;
+    case 180: return r >= 2 || c >= 2;
+    case 270: return r >= 2 || c < 2;
+    default: return r < 2 || c < 2;
+  }
+}
+function cellsOf(shape, rot, x, y){
+  const s = SHAPES[shape] || SHAPES.h, out = [];
+  for (let r = 0; r < s.h; r++) for (let c = 0; c < s.w; c++) if (inShape(shape, rot, c, r)) out.push((x+c) + ',' + (y+r));
+  return out;
+}
+function occupancy(exclude){
+  const occ = new Set();
+  for (const d of state.desks.values()) if (!exclude || !exclude.has(d.id)) for (const c of cellsOf(d.shape, d.rot||0, d.x, d.y)) occ.add(c);
+  return occ;
+}
+function collides(id, shape, rot, x, y, occ){
+  if (x < 0 || y < 0) return true;
+  occ = occ || occupancy(new Set(id ? [id] : []));
+  return cellsOf(shape, rot, x, y).some(c => occ.has(c));
+}
+function extent(){
+  let maxX = 0, maxY = 0;
+  for (const d of state.desks.values()) { const s = SHAPES[d.shape] || SHAPES.h; maxX = Math.max(maxX, d.x + s.w); maxY = Math.max(maxY, d.y + s.h); }
+  for (const z of state.zones.values()) { maxX = Math.max(maxX, z.x + z.w); maxY = Math.max(maxY, z.y + z.h); }
+  return { maxX, maxY };
+}
+// first top-left spot where a w×h box (plus a 1-square margin) is empty
+function findBox(w, h){
+  const occ = occupancy();
+  const { maxX, maxY } = extent();
+  const limitX = Math.max(maxX, w + 2, 30);
+  for (let y = 1; y <= maxY + 2; y++) {
+    for (let x = 1; x + w <= limitX + 1; x++) {
+      let ok = true;
+      for (let yy = y - 1; yy <= y + h && ok; yy++) for (let xx = x - 1; xx <= x + w; xx++) if (occ.has(xx + ',' + yy)) { ok = false; break; }
+      if (ok) return { x, y };
+    }
+  }
+  return { x: 1, y: maxY + 2 };
+}
+function deskNumParts(num){ const m = String(num||'').match(/^(.*?)(\d+)$/); return m ? { pre: m[1], n: parseInt(m[2],10), pad: m[2].length } : null; }
+function nextDeskNumber(){
+  let pre = '', pad = 1, max = 0;
+  for (const d of state.desks.values()) {
+    const p = deskNumParts(d.number);
+    if (p && p.n >= max) { max = p.n; pre = p.pre; pad = p.pad; }
+  }
+  return pre + String(max + 1).padStart(Math.max(pad, String(max + 1).length), '0');
+}
+function numberSeq(start, count){
+  const p = deskNumParts(start);
+  if (!p) return null;
+  const out = [];
+  for (let i = 0; i < count; i++) out.push(p.pre + String(p.n + i).padStart(p.pad, '0'));
+  return out;
+}
+function personMatches(p, q){
+  return fields().some(f => p[f.k] && String(p[f.k]).toLowerCase().includes(q));
+}
+function connectedDesks(startId){
+  const cellMap = new Map();
+  for (const d of state.desks.values()) for (const c of cellsOf(d.shape, d.rot||0, d.x, d.y)) cellMap.set(c, d.id);
+  const seen = new Set([startId]), queue = [startId];
+  while (queue.length) {
+    const d = state.desks.get(queue.shift());
+    for (const c of cellsOf(d.shape, d.rot||0, d.x, d.y)) {
+      const [x, y] = c.split(',').map(Number);
+      for (const [nx, ny] of [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]) {
+        const o = cellMap.get(nx + ',' + ny);
+        if (o && !seen.has(o)) { seen.add(o); queue.push(o); }
+      }
+    }
+  }
+  return seen;
+}
+
+/* ---------- storage ---------- */
+const writing = new Map();
+let active = 0; const waiters = [];
+async function gate(fn){
+  if (active >= 6) await new Promise(r => waiters.push(r));
+  active++;
+  try { return await fn(); } finally { active--; const w = waiters.shift(); if (w) w(); }
+}
+const COLS = { desks: () => state.desks, people: () => state.people, zones: () => state.zones, settings: () => state.settings };
+function setRec(col, rec){ COLS[col]().set(rec.id, rec); sync(col, rec.id); }
+function patchRec(col, id, patch){ const m = COLS[col](); const cur = m.get(id); if (!cur) return; m.set(id, { ...cur, ...patch }); sync(col, id); }
+function delRec(col, id){ COLS[col]().delete(id); sync(col, id); }
+
+/* ---------- seat operations ---------- */
+function seat(deskId, personId){
+  const d = state.desks.get(deskId); if (!d) return;
+  if (personId) {
+    const from = seatIndex().get(personId);
+    if (from && from.id !== deskId) patchRec('desks', from.id, { personId: null });
+    const name = state.people.get(personId)?.name || 'Person';
+    patchRec('desks', deskId, { personId });
+    toast(from && from.id !== deskId ? `Moved ${name} from desk ${from.number} to desk ${d.number}` : `${name} is now at desk ${d.number}`);
+  } else {
+    patchRec('desks', deskId, { personId: null });
+    toast(`Desk ${d.number} is now free`);
+  }
+  render(true);
+}
+function swapSeats(a, b){
+  const da = state.desks.get(a), dbk = state.desks.get(b); if (!da || !dbk) return;
+  patchRec('desks', a, { personId: dbk.personId || null });
+  patchRec('desks', b, { personId: da.personId || null });
+  toast(`Swapped desks ${da.number} and ${dbk.number}`);
+  render(true);
+}
+
+/* ---------- rendering ---------- */
+function render(forcePanel){
+  if (forcePanel) forcePanelNext = true;
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(() => { renderPending = false; renderNow(); });
+}
+function renderNow(){
+  if (drag) { needsRenderAfterDrag = true; return; }
+  rebuildTeamColors();
+  for (const id of [...state.sel]) if (!state.desks.has(id)) state.sel.delete(id);
+  if (state.selectedZone && !state.zones.has(state.selectedZone)) state.selectedZone = null;
+  if (state.selectedPerson && !state.people.has(state.selectedPerson)) state.selectedPerson = null;
+  const f = forcePanelNext; forcePanelNext = false;
+  renderStats(); renderNotices(); renderTools(); renderPlan(); renderLegend(); renderPanel(f);
+  if (state.loaded && !state.didFit) {
+    state.didFit = true;
+    const { maxX, maxY } = extent();
+    const sc = $('#scroll');
+    if (maxX && ((maxX + 2) * U_BASE * state.zoom > sc.clientWidth || (!narrow() && (maxY + 2) * U_BASE * state.zoom > sc.clientHeight))) fitToScreen();
+  }
+}
+
+function renderStats(){
+  const el = $('#stats');
+  if (!state.loaded) { el.innerHTML = '<span>Loading…</span>'; return; }
+  const ds = desksArr(), si = seatIndex();
+  const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
+  const noDesk = state.people.size - si.size;
+  el.innerHTML = `<span><b>${ds.length}</b> desks</span><span><b>${seated}</b> seated</span><span><b>${ds.length - seated}</b> free</span>`
+    + (noDesk > 0 ? `<span class="warn"><b>${noDesk}</b> without a desk</span>` : '');
+  $('#peopleCount').textContent = state.people.size ? state.people.size : '';
+}
+
+function renderNotices(){
+  const out = [];
+  if (state.loaded) out.push(storageNotices());
+  const ex = [...state.people.values()].filter(p => p.example);
+  if (ex.length && !state.readOnly) {
+    if (state.confirm === 'clearExamples') {
+      out.push(`<div class="notice"><p>Delete the ${ex.length} example people? Their desks stay on the map and become free.</p><div class="row"><button class="btn small danger solid" data-act="clearExamplesYes">Delete examples</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`);
+    } else {
+      out.push(`<div class="notice"><p><b>Example data.</b> The ${ex.length} people on this map are made up so you can see how it works. Import your team list or clear them when you're ready.</p><div class="row"><button class="btn small primary" data-act="openImport">Import my list</button><button class="btn small" data-act="clearExamples">Clear examples</button></div></div>`);
+    }
+  }
+  $('#notices').innerHTML = out.join('');
+}
+
+const ICON = {
+  h: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="1.5"/></svg>',
+  v: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="3" width="8" height="18" rx="1.5"/></svg>',
+  corner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v8h-10v10H3z"/></svg>',
+  row: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/><rect x="16" y="9" width="6" height="6" rx="1"/></svg>',
+  area: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/></svg>',
+  multi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M15 3h6v6M3 15v6h6"/></svg>',
+  rotate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+};
+
+function renderTools(){
+  const z = `<div class="spacer"></div><div class="zoom" role="group" aria-label="Zoom"><button data-act="zoomOut" aria-label="Zoom out">−</button><span>${Math.round(state.zoom*100)}%</span><button data-act="zoomIn" aria-label="Zoom in">+</button><button class="fit" data-act="fit">Fit</button></div>`;
+  let html;
+  if (state.arrange) {
+    html = `<span class="lab">Add</span>
+      <button class="btn small" data-act="addDesk" data-shape="h" title="Horizontal desk">${ICON.h}<span>Desk</span></button>
+      <button class="btn small" data-act="addDesk" data-shape="v" title="Vertical desk">${ICON.v}<span>Desk</span></button>
+      <button class="btn small" data-act="addDesk" data-shape="corner" title="Corner desk">${ICON.corner}<span>Corner</span></button>
+      <button class="btn small" data-act="addRow">${ICON.row}<span>Row</span></button>
+      <button class="btn small" data-act="addArea">${ICON.area}<span>Area</span></button>
+      <span class="sep"></span>
+      <button class="btn small" data-act="toggleMulti" aria-pressed="${state.multi}" title="Tap desks to add them to the selection">${ICON.multi}<span>Select several</span></button>
+      <button class="btn small ghost" data-act="renumber" ${state.desks.size ? '' : 'disabled'}>Renumber all</button>${z}`;
+    if (state.confirm === 'renumber') {
+      html += `<div class="confirmbar"><span>Renumber every desk left to right, top to bottom? People stay in their seats.</span><button class="btn small primary" data-act="renumberYes">Renumber</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div>`;
+    }
+  } else {
+    html = `<span class="hint">Select a desk to see who sits there.</span>${z}`;
+  }
+  $('#tools').innerHTML = html;
+}
+
+function deskHTML(d, hits){
+  const s = SHAPES[d.shape] || SHAPES.h;
+  const rot = d.rot || 0;
+  const p = d.personId ? state.people.get(d.personId) : null;
+  const shape = d.shape === 'corner'
+    ? `<path class="shape" d="M0.05 0.05H3.95V1.95H1.95V3.95H0.05Z" transform="rotate(${rot} 2 2)"/>`
+    : `<rect class="shape" x="0.05" y="0.05" width="${s.w - .1}" height="${s.h - .1}" rx="0.2"/>`;
+  const lblCls = d.shape === 'v' ? 'vert' : d.shape === 'corner' ? (rot === 180 || rot === 270 ? 'bottom' : 'top') : '';
+  const isSel = state.sel.has(d.id);
+  const cls = ['desk', p ? '' : 'free', isSel ? 'selected' : '', isSel && state.sel.size === 1 ? 'single' : '', hits && hits.has(d.id) ? 'hit' : ''].filter(Boolean).join(' ');
+  const tc = p ? teamVar(p.team) : 'var(--line-strong)';
+  const label = `Desk ${d.number}${p ? ', ' + p.name : ', free'}`;
+  return `<div class="${cls}" data-id="${esc(d.id)}" role="button" tabindex="0" aria-label="${esc(label)}" title="${esc(label)}" aria-pressed="${isSel}"
+    style="--x:${d.x};--y:${d.y};--w:${s.w};--h:${s.h};--tc:${tc}">
+    <svg viewBox="0 0 ${s.w} ${s.h}" preserveAspectRatio="none" aria-hidden="true">${shape}</svg>
+    <div class="lbl ${lblCls}">${numHTML(d.number)}<span class="nm">${p ? esc(shortName(p.name)) : 'Free'}</span></div>
+  </div>`;
+}
+// any letters before the number are wrapped so they can be dropped when zoomed far out
+function numHTML(number){
+  const p = deskNumParts(number);
+  if (!p) return `<span class="num">${esc(number)}</span>`;
+  const digits = String(number).slice(p.pre.length);
+  return `<span class="num">${p.pre ? `<span class="np">${esc(p.pre)}</span>` : ''}${esc(digits)}</span>`;
+}
+function zoneStyle(z){ return `--x:${z.x};--y:${z.y};--w:${z.w};--h:${z.h}`; }
+function zoneFillHTML(z){
+  return `<div class="zone ${state.selectedZone === z.id ? 'selected' : ''}" data-zid="${esc(z.id)}" style="${zoneStyle(z)}"></div>`;
+}
+function zoneTopHTML(z){
+  const sel = state.selectedZone === z.id;
+  return `<div class="zone-top ${sel ? 'selected' : ''}" data-zid="${esc(z.id)}" style="${zoneStyle(z)}">
+    <button class="zlabel" data-zid="${esc(z.id)}" ${state.arrange ? '' : 'tabindex="-1"'} aria-label="Area ${esc(z.name)}">${esc(z.name || 'Area')}</button>
+    ${state.arrange && sel ? `<span class="zhandle" data-zh="${esc(z.id)}" aria-hidden="true"></span>` : ''}
+  </div>`;
+}
+
+const planEl = $('#plan');
+function renderPlan(){
+  planEl.style.setProperty('--u', (U_BASE * state.zoom) + 'px');
+  planEl.classList.toggle('arrange', state.arrange);
+  planEl.classList.toggle('tiny', state.zoom < 0.45);
+  planEl.classList.toggle('small', state.zoom >= 0.45 && state.zoom < 0.7);
+  const ds = desksArr();
+  const { maxX, maxY } = extent();
+  let cols = Math.max(36, maxX + 4), rows = Math.max(22, maxY + 4);
+  if (state.arrange) { cols += 6; rows += 6; }
+  planEl.style.width = `calc(${cols} * var(--u))`;
+  planEl.style.height = `calc(${rows} * var(--u))`;
+  planEl.dataset.cols = cols; planEl.dataset.rows = rows;
+  if (!state.loaded) { planEl.innerHTML = `<div class="plan-msg"><p>Loading desk map…</p></div>`; return; }
+  if (!ds.length && !state.zones.size) {
+    planEl.classList.remove('searching');
+    planEl.innerHTML = `<div class="plan-msg"><h2>No desks yet</h2>
+      <p>Open your desk-map-data.json, build the floor row by row, import a layout from Excel, or start from a small starter layout.</p>
+      <div class="row2">${state.readOnly ? '' : `<button class="btn primary" data-act="addRow">${ICON.row}Add a row of desks</button><button class="btn" data-act="openData">Open a data file</button><button class="btn" data-act="openImport">Import from Excel</button><button class="btn" data-act="starter">Starter layout</button>`}</div></div>`;
+    return;
+  }
+  const q = state.query.trim().toLowerCase();
+  let hits = null;
+  if (q) {
+    hits = new Set();
+    for (const d of ds) {
+      const p = d.personId ? state.people.get(d.personId) : null;
+      if (String(d.number).toLowerCase().includes(q) || (p && personMatches(p, q))) hits.add(d.id);
+    }
+  }
+  planEl.classList.toggle('searching', !!q);
+  const zs = [...state.zones.values()];
+  planEl.innerHTML = zs.map(zoneFillHTML).join('')
+    + ds.sort((a,b) => (a.y - b.y) || (a.x - b.x)).map(d => deskHTML(d, hits)).join('')
+    + zs.map(zoneTopHTML).join('');
+}
+
+function renderLegend(){
+  $('#legend').innerHTML = teams().map(([t, n]) => `<button class="chipbtn" data-act="filterTeam" data-team="${esc(t)}" style="--tc:${teamVar(t)}"><span class="dot"></span>${esc(t)}<span class="n">${n}</span></button>`).join('');
+}
+
+/* ---------- panel ---------- */
+function renderPanel(force){
+  const body = $('#pbody');
+  if (!force) {
+    // don't wipe what someone is typing when data refreshes underneath
+    if ((state.editing || state.panelMode) && body.querySelector('form')) return;
+    const ae = document.activeElement;
+    if (ae && body.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
+  }
+  $('#tabDesk').setAttribute('aria-selected', state.tab === 'desk');
+  $('#tabPeople').setAttribute('aria-selected', state.tab === 'people');
+  if (state.editing) { body.innerHTML = personFormHTML(); return; }
+  if (state.panelMode === 'addRow') { body.innerHTML = addRowFormHTML(); updateRowPreview(); return; }
+  if (state.panelMode === 'fields') { body.innerHTML = fieldsPanelHTML(); return; }
+  if (!state.loaded) { body.innerHTML = '<p class="muted">Loading…</p>'; return; }
+  if (state.tab === 'people') { body.innerHTML = peoplePanelHTML(); return; }
+  if (state.selectedZone) { body.innerHTML = zonePanelHTML(); return; }
+  if (state.sel.size > 1) { body.innerHTML = groupPanelHTML(); return; }
+  body.innerHTML = state.sel.size === 1 ? deskPanelHTML() : overviewHTML();
+}
+
+function fmtDate(v){
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return v;
+  return new Date(+m[1], +m[2]-1, +m[3]).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function factRows(p){
+  return fields().filter(f => f.k !== 'name' && f.k !== 'team' && !f.textarea).map(f => {
+    let v = p[f.k];
+    if (f.type === 'date' && v) v = fmtDate(v);
+    const val = v ? `<span class="${f.mono ? 'mono' : ''}">${esc(v)}</span>${f.copy ? `<button class="copy" data-act="copy" data-val="${esc(p[f.k])}" aria-label="Copy ${esc(f.label.toLowerCase())}" title="Copy">${ICON.copy}</button>` : ''}` : '<span class="empty">—</span>';
+    return `<dt>${esc(f.label)}</dt><dd>${val}</dd>`;
+  }).join('');
+}
+function personCardHTML(p){
+  return `<div class="card" style="--tc:${teamVar(p.team)}">
+    <div class="card-top"><div class="avatar">${esc(initials(p.name))}</div>
+      <div class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${p.team ? `<span class="dot"></span>${esc(p.team)}` : 'No team'}</div></div>
+      ${state.readOnly ? '' : `<button class="btn small" data-act="editPerson" data-id="${esc(p.id)}">Edit</button>`}
+    </div>
+    <dl class="facts">${factRows(p)}</dl>
+    ${fields().filter(f => f.textarea && p[f.k]).map(f => `<div class="notes"><div class="eyebrow">${esc(f.label)}</div>${esc(p[f.k])}</div>`).join('')}
+  </div>`;
+}
+function personOptions(selectedId){
+  const si = seatIndex();
+  return peopleArr().map(p => {
+    const at = si.get(p.id);
+    return `<option value="${esc(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${esc(p.name)}${at && p.id !== selectedId ? ` (at desk ${esc(at.number)})` : (!at ? ' — no desk' : '')}</option>`;
+  }).join('');
+}
+
+function deskPanelHTML(){
+  const d = state.desks.get(single());
+  if (!d) return overviewHTML();
+  const p = d.personId ? state.people.get(d.personId) : null;
+  const s = SHAPES[d.shape] || SHAPES.h;
+  const ro = state.readOnly;
+  let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">${esc(s.label)} desk</span><div class="dnum">${esc(d.number)}</div></div>
+    <div class="row2">${p ? '<span class="pill ok">Occupied</span>' : '<span class="pill free">Free</span>'}<button class="btn small ghost" data-act="deselect">Close</button></div></div>`;
+
+  if (state.arrange && !ro) {
+    html += `<div class="box"><h3>Desk setup</h3>
+      <div class="stack"><label class="l" for="deskNum">Desk number</label>
+        <div class="row2"><input class="input mono" id="deskNum" value="${esc(d.number)}" style="flex:1"><button class="btn small" data-act="saveNum">Save</button></div></div>
+      <div class="stack"><label class="l" for="deskShape">Shape</label>
+        <select class="input" id="deskShape">${Object.entries(SHAPES).map(([k,v]) => `<option value="${k}" ${k === d.shape ? 'selected' : ''}>${v.label}</option>`).join('')}</select></div>
+      <div class="row2"><button class="btn small" data-act="rotate">${ICON.rotate}Rotate</button><button class="btn small" data-act="selectConnected">Select its whole row</button></div>
+      <span class="sm muted">Drag the desk to move it, or use the arrow keys. “Select its whole row” picks every desk touching this one so you can move them together.</span>
+      ${state.confirm === 'deleteDesk'
+        ? `<div class="confirm"><span>Delete desk ${esc(d.number)}?${p ? ` ${esc(p.name)} will be left without a desk.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete desk</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+        : `<div><button class="btn small danger" data-act="deleteSel">Delete desk</button></div>`}
+    </div>`;
+  }
+
+  if (!ro) {
+    html += `<div class="stack"><label class="l" for="assignSel">Seated here</label>
+      <select class="input" id="assignSel"><option value="">— Nobody (free desk) —</option>${personOptions(d.personId)}</select></div>`;
+  }
+  if (p) {
+    html += personCardHTML(p);
+    if (!ro) {
+      const others = desksArr().filter(o => o.id !== d.id).sort(byNumber);
+      html += `<div class="stack"><label class="l" for="swapSel">Swap seats with another desk</label>
+        <div class="row2"><select class="input" id="swapSel" style="flex:1"><option value="">Choose a desk…</option>${others.map(o => { const op = o.personId ? state.people.get(o.personId) : null; return `<option value="${esc(o.id)}">Desk ${esc(o.number)} · ${op ? esc(op.name) : 'free'}</option>`; }).join('')}</select>
+        <button class="btn small" data-act="swap">Swap</button></div></div>`;
+    }
+  } else {
+    html += `<div class="empty-note">Nobody sits at desk ${esc(d.number)}.${ro ? '' : ' Pick someone above, or add a new person straight to this desk.'}</div>`;
+    if (!ro) html += `<div><button class="btn primary" data-act="newPerson" data-desk="${esc(d.id)}">${ICON.plus}Add person to desk ${esc(d.number)}</button></div>`;
+  }
+  return html;
+}
+
+function groupPanelHTML(){
+  const ds = [...state.sel].map(id => state.desks.get(id)).filter(Boolean).sort(byNumber);
+  const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
+  const range = ds.length ? `Desks ${ds[0].number} – ${ds[ds.length - 1].number}` : '';
+  const ro = state.readOnly;
+  let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">Selection</span><div class="dnum">${ds.length} desks</div></div>
+    <button class="btn small ghost" data-act="deselect">Clear</button></div>
+    <p class="sm muted" style="margin:0"><span class="mono">${esc(range)}</span> · ${seated} seated · ${ds.length - seated} free</p>`;
+  if (!state.arrange || ro) return html + `<p class="sm muted" style="margin:0">Turn on Arrange desks to move or renumber these desks.</p>`;
+  html += `<div class="box"><h3>Move together</h3>
+      <div class="row2" style="align-items:flex-start;gap:14px">
+        <div class="nudge" role="group" aria-label="Nudge selection">
+          <span></span><button data-act="nudge" data-dx="0" data-dy="-1" aria-label="Move up">↑</button><span></span>
+          <button data-act="nudge" data-dx="-1" data-dy="0" aria-label="Move left">←</button><span>1 sq</span><button data-act="nudge" data-dx="1" data-dy="0" aria-label="Move right">→</button>
+          <span></span><button data-act="nudge" data-dx="0" data-dy="1" aria-label="Move down">↓</button><span></span>
+        </div>
+        <span class="sm muted" style="flex:1;min-width:140px">Or drag any selected desk on the map. Desks can't be dropped on top of others.</span>
+      </div></div>
+    <div class="box"><h3>Renumber these desks</h3>
+      <div class="grid2">
+        <div class="stack"><label class="l" for="grpStart">Start at</label><input class="input mono" id="grpStart" value="${esc(ds[0]?.number || nextDeskNumber())}"></div>
+        <div class="stack"><label class="l" for="grpOrder">Order</label><select class="input" id="grpOrder"><option value="lr">Left to right</option><option value="tb">Top to bottom</option></select></div>
+      </div>
+      <span class="err" id="grpErr" hidden></span>
+      <div><button class="btn small" data-act="renumberSel">Renumber ${ds.length} desks</button></div>
+    </div>
+    <div class="row2"><button class="btn small" data-act="makeArea">${ICON.area}Make an area around them</button><button class="btn small" data-act="growSel">Add touching desks</button></div>
+    ${state.confirm === 'deleteDesk'
+      ? `<div class="confirm"><span>Delete these ${ds.length} desks?${seated ? ` ${seated} ${seated === 1 ? 'person' : 'people'} will be left without a desk.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete ${ds.length} desks</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+      : `<div><button class="btn small danger" data-act="deleteSel">Delete ${ds.length} desks</button></div>`}`;
+  return html;
+}
+
+function zonePanelHTML(){
+  const z = state.zones.get(state.selectedZone);
+  if (!z) return overviewHTML();
+  const inside = desksArr().filter(d => d.x >= z.x && d.y >= z.y && d.x < z.x + z.w && d.y < z.y + z.h);
+  const seated = inside.filter(d => d.personId && state.people.has(d.personId)).length;
+  let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">Area</span><div class="dnum">${esc(z.name || 'Area')}</div></div>
+    <button class="btn small ghost" data-act="deselect">Close</button></div>
+    <p class="sm muted" style="margin:0">${inside.length} desks · ${seated} seated · ${inside.length - seated} free</p>`;
+  if (state.arrange && !state.readOnly) {
+    html += `<div class="box"><h3>Area setup</h3>
+      <div class="stack"><label class="l" for="zoneName">Name</label><input class="input" id="zoneName" value="${esc(z.name)}"></div>
+      <div class="grid2">
+        <div class="stack"><label class="l" for="zoneX">Column</label><input class="input mono" id="zoneX" type="number" min="0" value="${z.x}"></div>
+        <div class="stack"><label class="l" for="zoneY">Row</label><input class="input mono" id="zoneY" type="number" min="0" value="${z.y}"></div>
+        <div class="stack"><label class="l" for="zoneW">Width</label><input class="input mono" id="zoneW" type="number" min="3" value="${z.w}"></div>
+        <div class="stack"><label class="l" for="zoneH">Height</label><input class="input mono" id="zoneH" type="number" min="2" value="${z.h}"></div>
+      </div>
+      <div><button class="btn small primary" data-act="saveZone">Save area</button></div>
+      <span class="sm muted">On the map, drag the area's name to move it and the round handle in its corner to resize it. Both stay on top of desks. Moving an area doesn't move the desks in it.</span>
+      <div class="row2"><button class="btn small" data-act="selectInZone">Select the desks inside</button></div>
+      ${state.confirm === 'deleteZone'
+        ? `<div class="confirm"><span>Delete the area “${esc(z.name)}”? The desks inside stay where they are.</span><div class="row2"><button class="btn small danger solid" data-act="deleteZoneYes">Delete area</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+        : `<div><button class="btn small danger" data-act="deleteZone">Delete area</button></div>`}</div>`;
+  } else if (inside.length) {
+    html += `<div><button class="btn small" data-act="filterZone">Highlight its desks</button></div>`;
+  }
+  return html;
+}
+
+function overviewHTML(){
+  const ds = desksArr(), si = seatIndex();
+  const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
+  const noDesk = peopleArr().filter(p => !si.has(p.id));
+  const ts = teams();
+  let html = `<div class="stack" style="gap:4px"><span class="eyebrow">Overview</span>
+    <p style="margin:0">${state.arrange
+      ? 'Add single desks or whole rows from the toolbar. Drag desks to move them. To move many at once, drag a box around them with the mouse, or tap “Select several” and tap each one.'
+      : 'Select a desk on the map to see who sits there and their details.'}</p></div>
+    <div class="overview"><div class="ov"><b>${ds.length}</b><span>Desks</span></div><div class="ov"><b>${seated}</b><span>Seated</span></div><div class="ov"><b>${ds.length - seated}</b><span>Free</span></div></div>`;
+  if (noDesk.length) {
+    html += `<div class="stack"><span class="eyebrow">Without a desk · ${noDesk.length}</span><ul class="plist">${noDesk.slice(0, 8).map(personRowHTML).join('')}</ul>
+      ${noDesk.length > 8 ? `<button class="btn small ghost" data-act="tab" data-tab="people">See all people</button>` : ''}</div>`;
+  }
+  if (state.zones.size) {
+    html += `<div class="stack"><span class="eyebrow">Areas</span><div class="teamlist">${[...state.zones.values()].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(z => `<button class="chipbtn" data-act="openZone" data-id="${esc(z.id)}"><span class="dot" style="--tc:var(--accent)"></span>${esc(z.name || 'Area')}</button>`).join('')}</div></div>`;
+  }
+  if (ts.length) {
+    html += `<div class="stack"><span class="eyebrow">Teams</span><div class="teamlist">${ts.map(([t, n]) => `<button class="chipbtn" data-act="filterTeam" data-team="${esc(t)}" style="--tc:${teamVar(t)}"><span class="dot"></span>${esc(t)}<span class="n">${n} ${n === 1 ? 'person' : 'people'}</span></button>`).join('')}</div></div>`;
+  }
+  return html;
+}
+
+function personRowHTML(p){
+  const at = seatIndex().get(p.id);
+  return `<li><button class="prow" data-act="openPerson" data-id="${esc(p.id)}" style="--tc:${teamVar(p.team)}">
+    <span class="avatar">${esc(initials(p.name))}</span>
+    <span class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${esc([p.team, p.employeeId].filter(Boolean).join(' · ') || 'No team')}</div></span>
+    ${at ? `<span class="pill mono">Desk ${esc(at.number)}</span>` : '<span class="pill warn">No desk</span>'}
+  </button></li>`;
+}
+
+function peoplePanelHTML(){
+  const sp = state.selectedPerson ? state.people.get(state.selectedPerson) : null;
+  if (sp) {
+    const at = seatIndex().get(sp.id);
+    const free = desksArr().filter(d => !d.personId || !state.people.has(d.personId)).sort(byNumber);
+    let html = `<div><button class="btn small ghost" data-act="backToList">← All people</button></div>`;
+    html += personCardHTML(sp);
+    html += `<div class="stack"><span class="eyebrow">Desk</span>${at
+      ? `<div class="row2"><span class="pill mono">Desk ${esc(at.number)}</span><button class="btn small" data-act="showDesk" data-id="${esc(at.id)}">Show on map</button>${state.readOnly ? '' : `<button class="btn small ghost" data-act="unseat" data-id="${esc(at.id)}">Remove from desk</button>`}</div>`
+      : `<span class="pill warn" style="align-self:flex-start">No desk yet</span>`}</div>`;
+    if (!state.readOnly) {
+      html += `<div class="stack"><label class="l" for="seatSel">${at ? 'Move to a free desk' : 'Seat at a free desk'}</label>
+        <div class="row2"><select class="input" id="seatSel" style="flex:1"><option value="">${free.length ? 'Choose a desk…' : 'No free desks'}</option>${free.map(d => `<option value="${esc(d.id)}">Desk ${esc(d.number)}</option>`).join('')}</select>
+        <button class="btn small" data-act="seatPerson" data-id="${esc(sp.id)}" ${free.length ? '' : 'disabled'}>Seat</button></div></div>`;
+      html += state.confirm === 'deletePerson'
+        ? `<div class="confirm"><span>Delete ${esc(sp.name)} from the map? This removes all their details.</span><div class="row2"><button class="btn small danger solid" data-act="deletePersonYes" data-id="${esc(sp.id)}">Delete person</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+        : `<div><button class="btn small danger" data-act="deletePerson">Delete person</button></div>`;
+    }
+    return html;
+  }
+  const q = state.query.trim().toLowerCase();
+  const list = peopleArr().filter(p => !q || personMatches(p, q));
+  let html = state.readOnly ? '' : `<div class="row2"><button class="btn primary" data-act="newPerson">${ICON.plus}Add person</button><button class="btn" data-act="openImport">Import list</button><button class="btn" data-act="openFields">Fields</button></div>`;
+  if (!state.people.size) html += `<div class="empty-note">No people yet. Add them one by one, or import a spreadsheet with columns like Name, Employee ID, Email, Team and Desk.</div>`;
+  else if (!list.length) html += `<div class="empty-note">Nobody matches “${esc(state.query)}”.</div>`;
+  else html += `<div class="stack"><span class="eyebrow">${q ? `${list.length} match${list.length === 1 ? '' : 'es'}` : `${list.length} people`}</span><ul class="plist">${list.map(personRowHTML).join('')}</ul></div>`;
+  return html;
+}
+
+function datalists(){
+  return fields().filter(f => f.list).map(f => {
+    const vals = new Set();
+    for (const p of state.people.values()) if (p[f.k]) vals.add(String(p[f.k]).trim());
+    if (f.k !== 'team') for (const p of state.people.values()) for (const kk of ['supervisor','companyTeamLead','customerTeamLead','customerSupervisor']) if (p[kk]) vals.add(String(p[kk]).trim());
+    return `<datalist id="dl-${f.k}">${[...vals].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist>`;
+  }).join('');
+}
+
+function personFormHTML(){
+  const e = state.editing;
+  const p = e.id === 'new' ? {} : (state.people.get(e.id) || {});
+  const desk = e.deskId ? state.desks.get(e.deskId) : null;
+  return `<form class="form" id="personForm" novalidate>
+    <div class="stack" style="gap:4px"><span class="eyebrow">${e.id === 'new' ? 'New person' : 'Edit person'}</span>
+      ${desk ? `<span class="sm muted">Will be seated at desk <b class="mono">${esc(desk.number)}</b></span>` : ''}</div>
+    ${fields().map(f => {
+      const id = 'pf-' + f.k;
+      const v = esc(p[f.k] || '');
+      const ctl = f.textarea
+        ? `<textarea class="input" id="${id}" name="${f.k}">${v}</textarea>`
+        : `<input class="input ${f.mono ? 'mono' : ''}" id="${id}" name="${f.k}" type="${f.type || 'text'}" value="${v}" ${f.list ? `list="dl-${f.k}"` : ''} autocomplete="off">`;
+      return `<div class="f"><label class="l" for="${id}">${esc(f.label)}${f.req ? ' <span class="req">*</span>' : ''}</label>${ctl}${f.k === 'name' ? '<span class="err" id="nameErr" hidden>Enter a name.</span>' : ''}</div>`;
+    }).join('')}
+    ${datalists()}
+    <div class="form-actions"><button class="btn primary" type="submit">${e.id === 'new' ? 'Add person' : 'Save changes'}</button><button class="btn" type="button" data-act="cancelEdit">Cancel</button></div>
+  </form>`;
+}
+
+/* ---------- fields screen ---------- */
+function fieldsPanelHTML(){
+  const list = state.fieldsDraft || [];
+  return `<form class="form" id="fieldsForm" novalidate>
+    <div class="stack" style="gap:4px"><span class="eyebrow">Fields</span>
+      <span class="sm muted">The details kept for each person. Rename them, add your own, and list other Excel column titles that should fill each one. Tick “Recognise people by this” on fields that identify a person, such as IDs. When you import an updated list, a match on any ticked field updates that person instead of adding a duplicate.</span></div>
+    ${list.map((f, i) => `<div class="box fieldrow" data-i="${i}">
+      <div class="row2" style="flex-wrap:nowrap"><input class="input" data-fk="label" value="${esc(f.label)}" aria-label="Field name" style="flex:1;min-width:0;font-weight:600">
+        <button type="button" class="btn small ghost" data-act="fieldMove" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+        <button type="button" class="btn small ghost" data-act="fieldMove" data-i="${i}" data-d="1" ${i === list.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+        ${f.k === 'name' ? '' : `<button type="button" class="btn small ghost danger" data-act="fieldRemove" data-i="${i}" aria-label="Remove ${esc(f.label)}">✕</button>`}</div>
+      <div class="grid2">
+        <select class="input" data-fk="kind" aria-label="Kind of field" ${f.k === 'name' ? 'disabled' : ''}>${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${kindOf(f) === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <label class="check"><input type="checkbox" data-fk="match" ${f.match ? 'checked' : ''}>Recognise people by this</label>
+      </div>
+      <input class="input sm" data-fk="aliases" value="${esc((f.aliases || []).join(', '))}" placeholder="Other Excel column titles, separated by commas" aria-label="Other Excel column titles for ${esc(f.label)}">
+    </div>`).join('')}
+    <div><button type="button" class="btn small" data-act="fieldAdd">${ICON.plus}Add a field</button></div>
+    <span class="sm muted">Removing a field hides it from cards, forms and exports.</span>
+    <span class="err" id="fieldsErr" hidden></span>
+    <div class="form-actions"><button class="btn primary" type="submit">Save fields</button><button class="btn" type="button" data-act="cancelFields">Cancel</button></div>
+  </form>`;
+}
+function openFields(){
+  state.fieldsDraft = fields().map(f => ({ ...f, aliases: [...(f.aliases || [])] }));
+  state.panelMode = 'fields'; state.editing = null; state.confirm = null;
+  renderPanel(true);
+  if (window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
+}
+document.addEventListener('input', e => {
+  const el = e.target; if (!el.dataset || !el.dataset.fk || !el.closest('#fieldsForm')) return;
+  const i = +el.closest('.fieldrow').dataset.i, f = state.fieldsDraft[i]; if (!f) return;
+  if (el.dataset.fk === 'label') f.label = el.value;
+  else if (el.dataset.fk === 'aliases') f.aliases = el.value.split(',').map(x => x.trim()).filter(Boolean);
+});
+document.addEventListener('change', e => {
+  const el = e.target; if (!el.dataset || !el.dataset.fk || !el.closest('#fieldsForm')) return;
+  const i = +el.closest('.fieldrow').dataset.i, f = state.fieldsDraft[i]; if (!f) return;
+  if (el.dataset.fk === 'match') f.match = el.checked || undefined;
+  else if (el.dataset.fk === 'kind') state.fieldsDraft[i] = makeField(f.k, f.label, el.value, { req: f.req, match: f.match, aliases: f.aliases });
+});
+function submitFields(){
+  const list = state.fieldsDraft.map(f => ({ ...f, label: String(f.label || '').trim() }));
+  const err = $('#fieldsErr');
+  const blank = list.find(f => !f.label);
+  const seen = new Set(); const dup = list.find(f => { const n = norm(f.label); if (seen.has(n)) return true; seen.add(n); return false; });
+  if (blank || dup) { err.textContent = blank ? 'Every field needs a name.' : `Two fields are called “${dup.label}”. Give each a different name.`; err.hidden = false; return; }
+  for (const f of list) if (!f.match) delete f.match;
+  saveFields(list);
+  state.fieldsDraft = null; state.panelMode = null; render(true); toast('Fields saved');
+}
+
+/* ---------- add a row ---------- */
+let rowOpts = { shape: 'h', count: 10, dir: 'lr', pair: false, gap: 0 };
+function addRowFormHTML(){
+  return `<form class="form" id="rowForm" novalidate>
+    <div class="stack" style="gap:4px"><span class="eyebrow">Add a row of desks</span>
+      <span class="sm muted">Rows can be any length. Add one row at a time, then drag it into place.</span></div>
+    <div class="grid2">
+      <div class="f"><label class="l" for="rowCount">Number of desks</label><input class="input mono" id="rowCount" type="number" min="1" max="80" value="${rowOpts.count}"></div>
+      <div class="f"><label class="l" for="rowShape">Desk shape</label><select class="input" id="rowShape"><option value="h" ${rowOpts.shape === 'h' ? 'selected' : ''}>Horizontal</option><option value="v" ${rowOpts.shape === 'v' ? 'selected' : ''}>Vertical</option></select></div>
+      <div class="f"><label class="l" for="rowDir">Row runs</label><select class="input" id="rowDir"><option value="lr" ${rowOpts.dir === 'lr' ? 'selected' : ''}>Left to right</option><option value="tb" ${rowOpts.dir === 'tb' ? 'selected' : ''}>Top to bottom</option></select></div>
+      <div class="f"><label class="l" for="rowGap">Space between desks</label><select class="input" id="rowGap"><option value="0" ${rowOpts.gap === 0 ? 'selected' : ''}>None</option><option value="1" ${rowOpts.gap === 1 ? 'selected' : ''}>1 square</option><option value="2" ${rowOpts.gap === 2 ? 'selected' : ''}>2 squares</option></select></div>
+    </div>
+    <label class="check" for="rowPair"><input type="checkbox" id="rowPair" ${rowOpts.pair ? 'checked' : ''}>Back-to-back (two facing rows)</label>
+    <div class="f"><label class="l" for="rowStart">First desk number</label><input class="input mono" id="rowStart" value="${esc(nextDeskNumber())}"></div>
+    <div class="rowpreview" id="rowPreview"></div>
+    <span class="err" id="rowErr" hidden></span>
+    <div class="form-actions"><button class="btn primary" type="submit" id="rowSubmit">Add desks</button><button class="btn" type="button" data-act="cancelRow">Cancel</button></div>
+  </form>`;
+}
+function readRowForm(){
+  rowOpts = {
+    shape: $('#rowShape').value, dir: $('#rowDir').value, pair: $('#rowPair').checked,
+    gap: parseInt($('#rowGap').value, 10) || 0,
+    count: clamp(parseInt($('#rowCount').value, 10) || 0, 0, 80)
+  };
+  return { ...rowOpts, start: $('#rowStart').value.trim() };
+}
+function rowLayout(o){
+  // relative positions of each desk in the block
+  const s = SHAPES[o.shape];
+  const lines = o.pair ? 2 : 1;
+  const out = [];
+  for (let line = 0; line < lines; line++) for (let i = 0; i < o.count; i++) {
+    out.push(o.dir === 'lr' ? { x: i * (s.w + o.gap), y: line * s.h } : { x: line * s.w, y: i * (s.h + o.gap) });
+  }
+  const w = o.dir === 'lr' ? o.count * s.w + (o.count - 1) * o.gap : lines * s.w;
+  const h = o.dir === 'lr' ? lines * s.h : o.count * s.h + (o.count - 1) * o.gap;
+  return { cells: out, w, h };
+}
+function updateRowPreview(){
+  const el = $('#rowPreview'); if (!el) return;
+  const o = readRowForm();
+  const total = o.count * (o.pair ? 2 : 1);
+  const nums = o.count ? numberSeq(o.start, total) : null;
+  const err = $('#rowErr');
+  let msg = '';
+  if (!o.count) msg = 'Enter how many desks the row has (1 to 80).';
+  else if (!nums) msg = 'The first desk number needs to be a number, like 101.';
+  else {
+    const used = new Set(desksArr().map(d => norm(d.number)));
+    const clash = nums.find(n => used.has(norm(n)));
+    if (clash) msg = `${clash} is already used. Pick a different first number.`;
+  }
+  err.textContent = msg; err.hidden = !msg;
+  $('#rowSubmit').disabled = !!msg;
+  if (nums && o.count) {
+    const { w, h } = rowLayout(o);
+    el.textContent = `${total} desks · numbers ${nums[0]} to ${nums[nums.length - 1]} · ${w} × ${h} squares`;
+  } else el.textContent = '—';
+}
+function addRow(){
+  const o = readRowForm();
+  const total = o.count * (o.pair ? 2 : 1);
+  const nums = numberSeq(o.start, total);
+  if (!o.count || !nums) return;
+  const { cells, w, h } = rowLayout(o);
+  const at = findBox(w, h);
+  const ids = [];
+  cells.forEach((c, i) => {
+    const d = { id: uid('d'), number: nums[i], shape: o.shape, rot: 0, x: at.x + c.x, y: at.y + c.y, personId: null };
+    setRec('desks', d); ids.push(d.id);
+  });
+  state.panelMode = null; state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null;
+  render(true);
+  scrollToCell(at.x, at.y);
+  toast(`Added ${total} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the whole row.`);
+}
+
+/* ---------- actions ---------- */
+function selectDesk(id, opts = {}){
+  state.sel = new Set([id]); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  const d = state.desks.get(id);
+  state.selectedPerson = d && d.personId ? d.personId : null;
+  render(true);
+  if (opts.scrollMap) requestAnimationFrame(() => requestAnimationFrame(() => deskEl(id)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })));
+  if (opts.scrollPanel && window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
+}
+function toggleInSelection(id){
+  state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  if (state.sel.has(id)) state.sel.delete(id); else state.sel.add(id);
+  render(true);
+}
+function selectSet(ids){
+  state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  render(true);
+}
+function scrollToCell(x, y){
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const sc = $('#scroll'), u = U_BASE * state.zoom;
+    const px = x * u, py = y * u;
+    if (narrow()) {
+      if (px < sc.scrollLeft || px > sc.scrollLeft + sc.clientWidth - 60) sc.scrollTo({ left: Math.max(0, px - 40), behavior: 'smooth' });
+      const top = planEl.getBoundingClientRect().top + py;
+      if (top < 60 || top > window.innerHeight - 80) window.scrollTo({ top: window.scrollY + top - 100, behavior: 'smooth' });
+      return;
+    }
+    if (px < sc.scrollLeft || px > sc.scrollLeft + sc.clientWidth - 60 || py < sc.scrollTop || py > sc.scrollTop + sc.clientHeight - 60)
+      sc.scrollTo({ left: Math.max(0, px - 40), top: Math.max(0, py - 40), behavior: 'smooth' });
+  }));
+}
+function addDesk(shape){
+  const s = SHAPES[shape];
+  const spot = findBox(s.w, s.h);
+  const d = { id: uid('d'), number: nextDeskNumber(), shape, rot: 0, x: spot.x, y: spot.y, personId: null };
+  setRec('desks', d);
+  selectDesk(d.id, { scrollMap: true });
+  toast(`Added desk ${d.number}. Drag it into place.`);
+}
+function rotateDesk(id){
+  const d = state.desks.get(id); if (!d) return;
+  const next = d.shape === 'corner' ? { shape: 'corner', rot: ((d.rot || 0) + 90) % 360 } : { shape: d.shape === 'h' ? 'v' : 'h', rot: 0 };
+  if (collides(id, next.shape, next.rot, d.x, d.y)) { toast('Not enough room to rotate here. Move the desk first.'); return; }
+  patchRec('desks', id, next); render(true);
+}
+function changeShape(id, shape){
+  const d = state.desks.get(id); if (!d || d.shape === shape) return;
+  if (collides(id, shape, 0, d.x, d.y)) { toast(`A ${SHAPES[shape].label.toLowerCase()} desk doesn't fit here. Move it first.`); render(true); return; }
+  patchRec('desks', id, { shape, rot: 0 }); render(true);
+}
+function moveSelection(dx, dy){
+  const ids = [...state.sel]; if (!ids.length) return false;
+  const occ = occupancy(state.sel);
+  for (const id of ids) {
+    const d = state.desks.get(id);
+    if (collides(id, d.shape, d.rot || 0, d.x + dx, d.y + dy, occ)) { toast('That spot overlaps another desk'); return false; }
+  }
+  for (const id of ids) { const d = state.desks.get(id); patchRec('desks', id, { x: d.x + dx, y: d.y + dy }); }
+  render(true);
+  return true;
+}
+function renumberDesks(list, start, order){
+  const sorted = [...list].sort(order === 'tb' ? (a,b) => (a.x - b.x) || (a.y - b.y) : (a,b) => (a.y - b.y) || (a.x - b.x));
+  const nums = numberSeq(start, sorted.length);
+  if (!nums) return 'The first number needs to be a number, like 101.';
+  const ids = new Set(sorted.map(d => d.id));
+  const used = new Set(desksArr().filter(d => !ids.has(d.id)).map(d => norm(d.number)));
+  const clash = nums.find(n => used.has(norm(n)));
+  if (clash) return `${clash} is already used by a desk outside the selection.`;
+  sorted.forEach((d, i) => { if (d.number !== nums[i]) patchRec('desks', d.id, { number: nums[i] }); });
+  render(true);
+  return null;
+}
+function renumberAll(){
+  const ds = desksArr();
+  const first = ds.map(d => deskNumParts(d.number)).find(Boolean);
+  const pre = first ? first.pre : '';
+  const pad = pre ? Math.max(2, String(ds.length).length) : 1;
+  const sorted = ds.sort((a,b) => (a.y - b.y) || (a.x - b.x));
+  sorted.forEach((d, i) => { const number = pre + String(i + 1).padStart(pad, '0'); if (d.number !== number) patchRec('desks', d.id, { number }); });
+  state.confirm = null; render(true); toast('Desks renumbered');
+}
+function deleteSelection(){
+  const n = state.sel.size;
+  const one = n === 1 ? state.desks.get(single())?.number : null;
+  for (const id of state.sel) delRec('desks', id);
+  state.sel = new Set(); state.confirm = null; render(true);
+  toast(one ? `Deleted desk ${one}` : `Deleted ${n} desks`);
+}
+function addArea(fromSelection){
+  let z;
+  if (fromSelection && state.sel.size) {
+    let x0 = Infinity, y0 = Infinity, x1 = 0, y1 = 0;
+    for (const id of state.sel) { const d = state.desks.get(id); const s = SHAPES[d.shape]; x0 = Math.min(x0, d.x); y0 = Math.min(y0, d.y); x1 = Math.max(x1, d.x + s.w); y1 = Math.max(y1, d.y + s.h); }
+    z = { id: uid('z'), name: 'New area', x: Math.max(0, x0 - 1), y: Math.max(0, y0 - 1), w: x1 - Math.max(0, x0 - 1) + 1, h: y1 - Math.max(0, y0 - 1) + 1 };
+  } else {
+    const sc = $('#scroll'), u = U_BASE * state.zoom;
+    // place it at the top-left of whatever part of the map is on screen
+    const pr = planEl.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+    const vx = Math.max(sr.left, 0) - pr.left, vy = Math.max(sr.top, 0) - pr.top;
+    z = { id: uid('z'), name: 'New area', x: Math.max(1, Math.floor(vx / u) + 1), y: Math.max(1, Math.floor(vy / u) + 1), w: 16, h: 10 };
+  }
+  setRec('zones', z);
+  state.sel = new Set(); state.selectedZone = z.id; state.tab = 'desk'; state.confirm = null; state.panelMode = null;
+  render(true);
+  requestAnimationFrame(() => requestAnimationFrame(() => { const i = $('#zoneName'); if (i) { i.focus(); i.select(); } }));
+}
+const STARTER = [
+  ['h',0,2,2],['h',0,6,2],['h',0,2,4],['h',0,6,4],
+  ['h',0,13,2],['h',0,17,2],['h',0,13,4],['h',0,17,4],
+  ['v',0,2,9],['v',0,2,13],
+  ['corner',0,6,10],['corner',90,10,10],['corner',270,6,14],['corner',180,10,14],
+  ['v',0,17,9],['v',0,19,9],['v',0,17,13],['v',0,19,13]
+];
+function addStarter(){
+  STARTER.forEach(([shape, rot, x, y], i) => setRec('desks', { id: uid('d'), number: String(i + 1), shape, rot, x, y, personId: null }));
+  render(true); toast('Starter layout added. Turn on Arrange desks to move things around.');
+}
+function clearExamples(){
+  const ex = new Set([...state.people.values()].filter(p => p.example).map(p => p.id));
+  for (const d of state.desks.values()) if (d.personId && ex.has(d.personId)) patchRec('desks', d.id, { personId: null });
+  for (const id of ex) delRec('people', id);
+  state.confirm = null; state.selectedPerson = null; render(true); toast('Example people deleted');
+}
+async function copyText(v, btn){
+  try { await navigator.clipboard.writeText(v); toast('Copied'); }
+  catch { const span = btn.previousElementSibling; if (span) { const r = document.createRange(); r.selectNodeContents(span); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Selected. Press Ctrl+C or ⌘C to copy.'); } }
+}
+
+/* zoom */
+const narrow = () => window.matchMedia('(max-width: 880px)').matches;
+function setZoom(z){
+  const sc = $('#scroll');
+  const old = state.zoom;
+  z = clamp(z, 0.2, 1.75);
+  const cx = sc.scrollLeft + sc.clientWidth / 2, cy = sc.scrollTop + sc.clientHeight / 2;
+  state.zoom = z;
+  renderTools(); renderPlan();
+  const r = z / old;
+  sc.scrollLeft = cx * r - sc.clientWidth / 2;
+  if (!narrow()) sc.scrollTop = cy * r - sc.clientHeight / 2;
+}
+function fitToScreen(){
+  const sc = $('#scroll');
+  const { maxX, maxY } = extent();
+  if (!maxX) { setZoom(1); return; }
+  // on phones the map grows down the page, so only its width needs to fit
+  const zW = (sc.clientWidth - 24) / ((maxX + 2) * U_BASE);
+  const z = narrow() ? zW : Math.min(zW, (sc.clientHeight - 24) / ((maxY + 2) * U_BASE));
+  state.zoom = clamp(Math.floor(z * 100) / 100, 0.2, 1.5);
+  renderTools(); renderPlan();
+  sc.scrollTo({ left: 0, top: 0 });
+}
+
+let toastTimer;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const act = b.dataset.act;
+  const one = single();
+  switch (act) {
+    case 'zoomIn': setZoom(ZOOMS.find(z => z > state.zoom + 0.001) ?? ZOOMS[ZOOMS.length - 1]); break;
+    case 'zoomOut': setZoom([...ZOOMS].reverse().find(z => z < state.zoom - 0.001) ?? ZOOMS[0]); break;
+    case 'fit': fitToScreen(); break;
+    case 'addDesk': addDesk(b.dataset.shape); break;
+    case 'addRow': if (!state.arrange) setArrange(true); state.panelMode = 'addRow'; state.editing = null; state.tab = 'desk'; renderPanel(true); requestAnimationFrame(() => { $('#rowCount')?.focus(); if (window.innerWidth < 880) $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }); }); break;
+    case 'cancelRow': state.panelMode = null; renderPanel(true); break;
+    case 'addArea': addArea(false); break;
+    case 'makeArea': addArea(true); break;
+    case 'toggleMulti': state.multi = !state.multi; renderTools(); toast(state.multi ? 'Tap desks to add or remove them from the selection' : 'Tapping a desk selects just that desk'); break;
+    case 'renumber': state.confirm = 'renumber'; renderTools(); break;
+    case 'renumberYes': renumberAll(); break;
+    case 'cancelConfirm': state.confirm = null; render(true); break;
+    case 'starter': addStarter(); break;
+    case 'deselect': state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; render(true); break;
+    case 'rotate': if (one) rotateDesk(one); break;
+    case 'saveNum': saveDeskNumber(); break;
+    case 'selectConnected': if (one) { const s = connectedDesks(one); selectSet(s); toast(`Selected ${s.size} desks`); } break;
+    case 'growSel': { const all = new Set(); for (const id of state.sel) for (const c of connectedDesks(id)) all.add(c); selectSet(all); toast(`Selected ${all.size} desks`); break; }
+    case 'nudge': moveSelection(+b.dataset.dx, +b.dataset.dy); break;
+    case 'renumberSel': {
+      const list = [...state.sel].map(id => state.desks.get(id)).filter(Boolean);
+      const err = renumberDesks(list, $('#grpStart').value.trim(), $('#grpOrder').value);
+      if (err) { const el = $('#grpErr'); el.textContent = err; el.hidden = false; } else toast(`Renumbered ${list.length} desks`);
+      break;
+    }
+    case 'deleteSel': state.confirm = 'deleteDesk'; renderPanel(true); break;
+    case 'deleteSelYes': deleteSelection(); break;
+    case 'swap': { const v = $('#swapSel')?.value; if (v && one) swapSeats(one, v); else toast('Choose a desk to swap with'); break; }
+    case 'newPerson': state.editing = { id: 'new', deskId: b.dataset.desk || null }; state.panelMode = null; renderPanel(true); focusFirst(); break;
+    case 'editPerson': state.editing = { id: b.dataset.id }; state.panelMode = null; renderPanel(true); focusFirst(); break;
+    case 'cancelEdit': state.editing = null; renderPanel(true); break;
+    case 'openPerson': {
+      const at = seatIndex().get(b.dataset.id);
+      if (at) selectDesk(at.id, { scrollMap: true });
+      else { state.selectedPerson = b.dataset.id; state.sel = new Set(); state.selectedZone = null; state.tab = 'people'; state.confirm = null; render(true); }
+      break;
+    }
+    case 'openZone': state.selectedZone = b.dataset.id; state.sel = new Set(); state.confirm = null; render(true); { const z = state.zones.get(b.dataset.id); if (z) scrollToCell(z.x, z.y); } break;
+    case 'saveZone': saveZoneName(); break;
+    case 'selectInZone': case 'filterZone': {
+      const z = state.zones.get(state.selectedZone); if (!z) break;
+      const inside = desksArr().filter(d => d.x >= z.x && d.y >= z.y && d.x < z.x + z.w && d.y < z.y + z.h).map(d => d.id);
+      selectSet(inside); toast(`Selected ${inside.length} desks in ${z.name || 'this area'}`); break;
+    }
+    case 'deleteZone': state.confirm = 'deleteZone'; renderPanel(true); break;
+    case 'deleteZoneYes': { const z = state.zones.get(state.selectedZone); delRec('zones', state.selectedZone); state.selectedZone = null; state.confirm = null; render(true); toast(`Deleted area ${z?.name || ''}`.trim()); break; }
+    case 'backToList': state.selectedPerson = null; state.confirm = null; renderPanel(true); break;
+    case 'showDesk': selectDesk(b.dataset.id, { scrollMap: true }); break;
+    case 'unseat': seat(b.dataset.id, null); break;
+    case 'seatPerson': { const v = $('#seatSel')?.value; if (!v) { toast('Choose a desk first'); break; } seat(v, b.dataset.id); selectDesk(v, { scrollMap: true }); break; }
+    case 'deletePerson': state.confirm = 'deletePerson'; renderPanel(true); break;
+    case 'deletePersonYes': {
+      const id = b.dataset.id; const p = state.people.get(id);
+      const at = seatIndex().get(id); if (at) patchRec('desks', at.id, { personId: null });
+      delRec('people', id);
+      state.confirm = null; state.selectedPerson = null; render(true); toast(`Deleted ${p?.name || 'person'}`); break;
+    }
+    case 'tab': state.tab = b.dataset.tab; state.selectedPerson = null; renderPanel(true); break;
+    case 'filterTeam': setQuery(b.dataset.team); break;
+    case 'copy': copyText(b.dataset.val, b); break;
+    case 'openImport': openImport(); break;
+    case 'openData': openData(); break;
+    case 'reconnectFile': reconnectFile(); break;
+    case 'useFile': { const f = store.conflict; store.conflict = null; adoptFile(f); render(true); toast(`Loaded ${store.fileName}`); break; }
+    case 'keepLocal': store.conflict = null; saveNow().then(() => toast(`Saved this browser's version to ${store.fileName}`)); render(true); break;
+    case 'openFields': openFields(); break;
+    case 'cancelFields': state.fieldsDraft = null; state.panelMode = null; renderPanel(true); break;
+    case 'fieldMove': { const i = +b.dataset.i, j = i + +b.dataset.d, L = state.fieldsDraft; if (j >= 0 && j < L.length) { [L[i], L[j]] = [L[j], L[i]]; renderPanel(true); } break; }
+    case 'fieldRemove': state.fieldsDraft.splice(+b.dataset.i, 1); renderPanel(true); break;
+    case 'fieldAdd': state.fieldsDraft.push(makeField(uid('f'), 'New field', 'text', {})); renderPanel(true); requestAnimationFrame(() => { const ins = document.querySelectorAll('#fieldsForm [data-fk="label"]'); const last = ins[ins.length - 1]; if (last) { last.focus(); last.select(); } }); break;
+    case 'clearExamples': state.confirm = 'clearExamples'; renderNotices(); break;
+    case 'clearExamplesYes': clearExamples(); break;
+  }
+});
+document.querySelectorAll('.tabs button').forEach(t => t.addEventListener('click', () => {
+  state.tab = t.dataset.tab; state.editing = null; state.panelMode = null; state.confirm = null;
+  if (state.tab === 'people' && state.sel.size) state.selectedPerson = null;
+  renderPanel(true);
+}));
+document.addEventListener('change', e => {
+  const t = e.target, one = single();
+  if (t.id === 'assignSel' && one) seat(one, t.value || null);
+  if (t.id === 'deskShape' && one) changeShape(one, t.value);
+});
+document.addEventListener('input', e => {
+  if (e.target.closest && e.target.closest('#rowForm')) updateRowPreview();
+});
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'deskNum' && e.key === 'Enter') { e.preventDefault(); saveDeskNumber(); }
+  if (/^zone(Name|X|Y|W|H)$/.test(e.target.id) && e.key === 'Enter') { e.preventDefault(); saveZoneName(); }
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.id === 'rowForm') { if (!$('#rowSubmit').disabled) addRow(); return; }
+  if (e.target.id === 'fieldsForm') { submitFields(); return; }
+  if (e.target.id !== 'personForm') return;
+  const fd = new FormData(e.target);
+  const data = {};
+  for (const f of fields()) data[f.k] = String(fd.get(f.k) || '').trim();
+  if (!data.name) { $('#nameErr').hidden = false; $('#pf-name').focus(); return; }
+  const ed = state.editing;
+  state.editing = null;
+  if (ed.id === 'new') {
+    const p = { id: uid('p'), ...data };
+    setRec('people', p);
+    if (ed.deskId) { seat(ed.deskId, p.id); selectDesk(ed.deskId); }
+    else { state.selectedPerson = p.id; state.tab = 'people'; render(true); toast(`Added ${p.name}`); }
+  } else {
+    const cur = state.people.get(ed.id) || { id: ed.id };
+    const p = { ...cur, ...data }; delete p.example;
+    setRec('people', p); render(true); toast('Saved');
+  }
+});
+function focusFirst(){ requestAnimationFrame(() => $('#pf-name')?.focus()); }
+function saveDeskNumber(){
+  const id = single(); const v = ($('#deskNum')?.value || '').trim();
+  if (!id) return;
+  if (!v) { toast('Enter a desk number'); return; }
+  const dup = desksArr().find(d => d.id !== id && norm(d.number) === norm(v));
+  if (dup) { toast(`${v} is already used by another desk`); return; }
+  patchRec('desks', id, { number: v }); $('#deskNum').blur(); render(true); toast(`Desk renamed to ${v}`);
+}
+function saveZoneName(){
+  const id = state.selectedZone; const v = ($('#zoneName')?.value || '').trim();
+  if (!id) return;
+  if (!v) { toast('Enter a name for the area'); return; }
+  const num = (sel, min) => { const n = parseInt($(sel)?.value, 10); return isNaN(n) ? null : Math.max(min, n); };
+  const z = state.zones.get(id);
+  const patch = { name: v, x: num('#zoneX', 0) ?? z.x, y: num('#zoneY', 0) ?? z.y, w: num('#zoneW', 3) ?? z.w, h: num('#zoneH', 2) ?? z.h };
+  patchRec('zones', id, patch); document.activeElement?.blur(); render(true); toast('Area saved');
+}
+
+/* search */
+const qEl = $('#q');
+let qTimer;
+qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.query = qEl.value; renderPlan(); if (state.tab === 'people' && !state.selectedPerson && !state.editing) renderPanel(true); }, 120); });
+qEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const hit = planEl.querySelector('.desk.hit');
+    if (hit) selectDesk(hit.dataset.id, { scrollMap: true });
+    else if (state.query.trim()) { state.tab = 'people'; state.selectedPerson = null; renderPanel(true); }
+  }
+  if (e.key === 'Escape') setQuery('');
+});
+function setQuery(v){ qEl.value = v; state.query = v; renderPlan(); if (state.tab === 'people' && !state.selectedPerson) renderPanel(true); }
+
+/* arrange mode */
+function setArrange(on){
+  if (state.readOnly) on = false;
+  state.arrange = on; state.confirm = null;
+  if (!on) { state.multi = false; state.panelMode = null; if (state.sel.size > 1) state.sel = new Set(); }
+  const b = $('#arrangeBtn'); b.setAttribute('aria-pressed', on); b.querySelector('span').textContent = on ? 'Done arranging' : 'Arrange desks';
+  render(true);
+}
+$('#arrangeBtn').addEventListener('click', () => setArrange(!state.arrange));
+
+/* map interaction: desk drag (single or group), area move/resize, box select */
+function cellFromEvent(e){
+  const r = planEl.getBoundingClientRect(), u = U_BASE * state.zoom;
+  return { x: (e.clientX - r.left) / u, y: (e.clientY - r.top) / u };
+}
+planEl.addEventListener('pointerdown', e => {
+  if (e.button > 0 || !state.arrange || state.readOnly || e.target.closest('[data-act]')) return;
+  const zh = e.target.closest('[data-zh]');
+  const zl = !zh && e.target.closest('.zlabel');
+  const el = !zh && !zl && e.target.closest('.desk');
+  if (zh || zl) {
+    const id = (zh || zl).dataset.zh || zl.dataset.zid;
+    const z = state.zones.get(id); if (!z) return;
+    e.preventDefault();
+    try { (zh || zl).setPointerCapture(e.pointerId); } catch {}
+    drag = { kind: zh ? 'zresize' : 'zmove', id, els: [...planEl.querySelectorAll(`.zone[data-zid="${CSS.escape(id)}"], .zone-top[data-zid="${CSS.escape(id)}"]`)], sx: e.clientX, sy: e.clientY, ox: z.x, oy: z.y, ow: z.w, oh: z.h, nx: z.x, ny: z.y, nw: z.w, nh: z.h, moved: false };
+    return;
+  }
+  if (el) {
+    const id = el.dataset.id; const d = state.desks.get(id); if (!d) return;
+    e.preventDefault();
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    const additive = e.shiftKey || e.metaKey || e.ctrlKey || state.multi;
+    const groupIds = state.sel.has(id) && state.sel.size > 1 ? [...state.sel] : [id];
+    const members = groupIds.map(mid => { const m = state.desks.get(mid); return { id: mid, el: deskEl(mid), ox: m.x, oy: m.y, shape: m.shape, rot: m.rot || 0 }; });
+    drag = { kind: 'desk', id, members, additive, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, moved: false, blocked: false, occ: occupancy(new Set(groupIds)) };
+    return;
+  }
+  // empty sheet: draw a selection box (mouse/pen only, so touch can still scroll)
+  if (e.pointerType === 'touch') return;
+  e.preventDefault();
+  const c = cellFromEvent(e);
+  const box = document.createElement('div'); box.className = 'marquee'; planEl.appendChild(box);
+  try { planEl.setPointerCapture(e.pointerId); } catch {}
+  drag = { kind: 'box', sx: c.x, sy: c.y, ex: c.x, ey: c.y, box, additive: e.shiftKey || e.metaKey || e.ctrlKey, moved: false, base: new Set(state.sel) };
+});
+planEl.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const u = U_BASE * state.zoom;
+  if (drag.kind === 'box') {
+    const c = cellFromEvent(e); drag.ex = c.x; drag.ey = c.y; drag.moved = true;
+    const x0 = Math.min(drag.sx, drag.ex), y0 = Math.min(drag.sy, drag.ey), x1 = Math.max(drag.sx, drag.ex), y1 = Math.max(drag.sy, drag.ey);
+    Object.assign(drag.box.style, { left: x0 * u + 'px', top: y0 * u + 'px', width: (x1 - x0) * u + 'px', height: (y1 - y0) * u + 'px' });
+    const hit = new Set(drag.additive ? drag.base : []);
+    for (const d of state.desks.values()) { const s = SHAPES[d.shape]; if (d.x < x1 && d.x + s.w > x0 && d.y < y1 && d.y + s.h > y0) hit.add(d.id); }
+    planEl.querySelectorAll('.desk').forEach(n => n.classList.toggle('selected', hit.has(n.dataset.id)));
+    drag.hit = hit;
+    return;
+  }
+  const dxp = e.clientX - drag.sx, dyp = e.clientY - drag.sy;
+  if (!drag.moved && Math.hypot(dxp, dyp) < 5) return;
+  drag.moved = true;
+  if (drag.kind === 'zmove' || drag.kind === 'zresize') {
+    const dx = Math.round(dxp / u), dy = Math.round(dyp / u);
+    if (drag.kind === 'zmove') { drag.nx = Math.max(0, drag.ox + dx); drag.ny = Math.max(0, drag.oy + dy); for (const el of drag.els) { el.style.setProperty('--x', drag.nx); el.style.setProperty('--y', drag.ny); } }
+    else { drag.nw = Math.max(3, drag.ow + dx); drag.nh = Math.max(2, drag.oh + dy); for (const el of drag.els) { el.style.setProperty('--w', drag.nw); el.style.setProperty('--h', drag.nh); } }
+    return;
+  }
+  // desk(s)
+  let dx = Math.round(dxp / u), dy = Math.round(dyp / u);
+  const minX = Math.min(...drag.members.map(m => m.ox)), minY = Math.min(...drag.members.map(m => m.oy));
+  dx = Math.max(dx, -minX); dy = Math.max(dy, -minY);
+  if (dx === drag.dx && dy === drag.dy && drag.members[0].el?.classList.contains('dragging')) return;
+  drag.dx = dx; drag.dy = dy;
+  let blocked = false;
+  for (const m of drag.members) {
+    if (!blocked && cellsOf(m.shape, m.rot, m.ox + dx, m.oy + dy).some(c => drag.occ.has(c))) blocked = true;
+  }
+  drag.blocked = blocked;
+  for (const m of drag.members) {
+    if (!m.el) continue;
+    m.el.classList.add('dragging'); m.el.classList.toggle('blocked', blocked);
+    m.el.style.setProperty('--x', m.ox + dx); m.el.style.setProperty('--y', m.oy + dy);
+  }
+  // grow the sheet while dragging toward its edge
+  const maxR = Math.max(...drag.members.map(m => m.ox + dx + SHAPES[m.shape].w)) + 8;
+  const maxB = Math.max(...drag.members.map(m => m.oy + dy + SHAPES[m.shape].h)) + 8;
+  if (+planEl.dataset.cols < maxR) { planEl.dataset.cols = maxR; planEl.style.width = `calc(${maxR} * var(--u))`; }
+  if (+planEl.dataset.rows < maxB) { planEl.dataset.rows = maxB; planEl.style.height = `calc(${maxB} * var(--u))`; }
+});
+function endDrag(cancelled){
+  if (!drag) return;
+  const g = drag; drag = null;
+  const flush = () => { if (needsRenderAfterDrag) { needsRenderAfterDrag = false; render(); } };
+  if (g.kind === 'box') {
+    g.box.remove();
+    if (!g.moved) { if (!g.additive) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; render(true); } flush(); return; }
+    needsRenderAfterDrag = false;
+    selectSet(g.hit || g.base);
+    if ((g.hit || new Set()).size > 1) toast(`Selected ${g.hit.size} desks. Drag any of them to move the group.`);
+    return;
+  }
+  if (g.kind === 'zmove' || g.kind === 'zresize') {
+    needsRenderAfterDrag = false;
+    if (!g.moved || cancelled) { state.selectedZone = g.id; state.sel = new Set(); state.tab = 'desk'; state.confirm = null; state.panelMode = null; render(true); return; }
+    patchRec('zones', g.id, g.kind === 'zmove' ? { x: g.nx, y: g.ny } : { w: g.nw, h: g.nh });
+    state.selectedZone = g.id; state.sel = new Set(); render(true);
+    return;
+  }
+  for (const m of g.members) m.el?.classList.remove('dragging', 'blocked');
+  if (!g.moved) {
+    needsRenderAfterDrag = false;
+    if (g.additive) toggleInSelection(g.id); else selectDesk(g.id);
+    return;
+  }
+  if (g.blocked || cancelled) {
+    for (const m of g.members) if (m.el) { m.el.style.setProperty('--x', m.ox); m.el.style.setProperty('--y', m.oy); }
+    if (!cancelled) toast('That spot overlaps another desk');
+    flush();
+    return;
+  }
+  needsRenderAfterDrag = false;
+  if (g.members.length === 1) state.sel = new Set([g.id]);
+  if (g.dx || g.dy) for (const m of g.members) patchRec('desks', m.id, { x: m.ox + g.dx, y: m.oy + g.dy });
+  render(true);
+}
+planEl.addEventListener('pointerup', () => endDrag(false));
+planEl.addEventListener('pointercancel', () => endDrag(true));
+planEl.addEventListener('click', e => {
+  if (e.target.closest('[data-act]')) return;
+  if (state.arrange) return; // handled by pointer events
+  const zl = e.target.closest('.zlabel');
+  const el = e.target.closest('.desk');
+  if (el) selectDesk(el.dataset.id, { scrollPanel: true });
+  else if (zl) { state.selectedZone = zl.dataset.zid; state.sel = new Set(); state.tab = 'desk'; render(true); }
+});
+planEl.addEventListener('keydown', e => {
+  const el = e.target.closest('.desk'); if (!el) return;
+  const id = el.dataset.id;
+  const refocus = () => requestAnimationFrame(() => requestAnimationFrame(() => deskEl(id)?.focus()));
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    if (state.arrange && (e.shiftKey || state.multi)) toggleInSelection(id); else selectDesk(id);
+    refocus(); return;
+  }
+  if (!state.arrange) return;
+  const moves = { ArrowLeft: [-1,0], ArrowRight: [1,0], ArrowUp: [0,-1], ArrowDown: [0,1] };
+  if (moves[e.key]) {
+    e.preventDefault();
+    if (!state.sel.has(id)) state.sel = new Set([id]);
+    moveSelection(...moves[e.key]); refocus();
+  } else if ((e.key === 'r' || e.key === 'R') && state.sel.size <= 1) { rotateDesk(id); refocus(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!$('#importOverlay').hidden) { closeImport(); return; }
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  if (state.editing || state.panelMode) return;
+  if (state.sel.size || state.selectedZone) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; render(true); }
+});
+
+/* ---------- spreadsheet import / export ---------- */
+let xlsxPromise = null;
+function loadXLSX(){
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!xlsxPromise) xlsxPromise = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => res(window.XLSX); s.onerror = () => { xlsxPromise = null; rej(new Error('load')); };
+    document.head.appendChild(s);
+  });
+  return xlsxPromise;
+}
+let imp = null;
+function openImport(){
+  if (state.readOnly) return;
+  imp = null; renderImport(); $('#importOverlay').hidden = false;
+  requestAnimationFrame(() => $('#impTitle')?.focus());
+}
+function closeImport(){ $('#importOverlay').hidden = true; imp = null; }
+$('#importBtn').addEventListener('click', openImport);
+$('#importOverlay').addEventListener('click', e => { if (e.target.id === 'importOverlay') closeImport(); });
+
+function renderImport(){
+  const dlg = $('#importDialog');
+  if (!imp) {
+    dlg.innerHTML = `<h2 id="impTitle" tabindex="-1">Import from a spreadsheet</h2>
+      <p class="muted">Upload an Excel (.xlsx) or CSV file (this needs an internet connection). To restore a desk map backup (.json), use Data instead. Each sheet is read on its own, so one workbook can hold your people, your desk layout and your areas. Columns are matched by their header.</p>
+      <div class="drop" id="drop">
+        <strong>Drop a file here</strong><span class="muted sm">or</span>
+        <label class="btn primary" for="impFile" style="cursor:pointer">Choose file</label>
+        <input id="impFile" type="file" accept=".xlsx,.xls,.csv,text/csv" hidden>
+        <span class="muted sm" id="impStatus"></span>
+      </div>
+      <div class="helpgrid">
+        <div class="box"><h3>People sheet</h3>
+          <p>One row per person with a name column (or First name + Last name). Other columns are matched to your fields by their titles, and you can change any match before importing. Desk is the desk number.</p>
+          <p>People already on the map are recognised by the fields ticked “Recognise people by this” (by default Employee ID, Customer ID, email or name) and updated instead of duplicated. Manage them with People → Fields.</p>
+          ${downloads ? '<div><button class="btn small" data-imp="tplPeople">People template</button></div>' : ''}</div>
+        <div class="box"><h3>Desk layout sheet</h3>
+          <p>Desk, Shape, Column, Row, Rotation. Shape is Horizontal, Vertical or Corner. Column and Row count grid squares from the top-left corner.</p>
+          <p>A horizontal desk is 4 squares wide and 2 tall, a vertical one 2 × 4, a corner one 4 × 4. Rotation (0, 90, 180, 270) only matters for corners. Desks already on the map are matched by number and moved.</p>
+          ${downloads ? '<div><button class="btn small" data-imp="tplLayout">Layout template</button></div>' : ''}</div>
+      </div>
+      <p class="sm muted">Tip: Export gives you a workbook in exactly this format, which also works as a backup you can import again.</p>
+      <div class="row2"><span style="flex:1"></span><button class="btn" data-imp="close">Cancel</button></div>`;
+    const fi = $('#impFile'), drop = $('#drop');
+    fi.addEventListener('change', () => fi.files[0] && readFile(fi.files[0]));
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readFile(f); });
+    return;
+  }
+  const P = imp.plan;
+  const secs = [];
+  if (P.layout) {
+    const L = P.layout;
+    secs.push(`<div class="impsec"><h3>Desk layout <span class="muted sm">· sheet “${esc(L.sheet)}”</span></h3>
+      <div class="sumrow"><span class="pill ok">${L.created} new desks</span><span class="pill free">${L.updated} moved or updated</span>${L.skipped ? `<span class="pill warn">${L.skipped} rows skipped</span>` : ''}${L.overlaps ? `<span class="pill warn">${L.overlaps} overlapping</span>` : ''}</div>
+      ${L.skipped ? `<p class="sm muted">Rows are skipped when the desk number, column or row is missing.</p>` : ''}
+      ${L.overlaps ? `<p class="sm muted">${L.overlaps} desks will sit on top of another desk. They'll still be imported; turn on Arrange desks afterwards to fix them.</p>` : ''}</div>`);
+  }
+  if (P.areas) {
+    secs.push(`<div class="impsec"><h3>Areas <span class="muted sm">· sheet “${esc(P.areas.sheet)}”</span></h3>
+      <div class="sumrow"><span class="pill ok">${P.areas.created} new</span><span class="pill free">${P.areas.updated} updated</span></div></div>`);
+  }
+  if (P.people) {
+    const Q = P.people;
+    const fs = fields();
+    const special = { desk: 'Desk number', firstName: 'First name', lastName: 'Last name' };
+    const fieldLabel = k => special[k] || (k.startsWith('new:') ? k.slice(4) : fs.find(f => f.k === k)?.label || k);
+    const counts = {}; for (const k of Object.values(Q.colMap)) if (k && k !== '__new__') counts[k] = (counts[k] || 0) + 1;
+    const opts = h => {
+      const cur = Q.colMap[h];
+      return `<option value="" ${!cur ? 'selected' : ''}>Skip this column</option>`
+        + fs.map(f => `<option value="${esc(f.k)}" ${cur === f.k ? 'selected' : ''}>${esc(f.label)}</option>`).join('')
+        + Object.entries(special).map(([k, v]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${v}</option>`).join('')
+        + `<option value="__new__" ${cur === '__new__' ? 'selected' : ''}>New field: ${esc(String(h).trim())}</option>`;
+    };
+    const sample = h => { const r = Q.rows.find(r => String(r[h] ?? '').trim()); return r ? String(r[h]).trim() : ''; };
+    const idCols = fs.filter(f => f.match && f.k !== 'name' && f.k !== 'email' && Q.mapping[f.k]).slice(0, 2).map(f => f.k);
+    const cols = ['name', ...idCols, Q.mapping.team ? 'team' : null, 'desk'].filter(Boolean);
+    const noName = !Q.mapping.name && !Q.mapping.firstName && !Q.mapping.lastName;
+    secs.push(`<div class="impsec"><h3>People <span class="muted sm">· sheet “${esc(Q.sheet)}”</span></h3>
+      <div class="sumrow"><span class="pill ok">${Q.created} new</span><span class="pill free">${Q.updated} updated</span><span class="pill mono">${Q.seated} seated</span>${Q.missingDesks.length ? `<span class="pill warn">${Q.missingDesks.length} desk numbers not found</span>` : ''}${Q.skipped ? `<span class="pill warn">${Q.skipped} without a name skipped</span>` : ''}</div>
+      ${Q.missingDesks.length ? `<p class="sm muted">Not on the map: <span class="mono">${esc(Q.missingDesks.slice(0, 12).join(', '))}${Q.missingDesks.length > 12 ? '…' : ''}</span>. Those people will be imported without a desk.</p>` : ''}
+      ${noName ? `<div class="confirm"><span>Choose which column holds each person's name. People without a name can't be imported.</span></div>` : ''}
+      <div class="stack"><span class="eyebrow">Where each column goes</span>
+        <p class="sm muted" style="margin:0">Check the matches and change any that are wrong. Your choices are remembered for next time.</p>
+        <div class="tablewrap"><table class="pv maptable"><thead><tr><th>Excel column</th><th>Example</th><th>Goes to</th></tr></thead><tbody>
+        ${Q.headers.map((h, i) => { const k = Q.colMap[h]; const dup = k && counts[k] > 1 && Q.mapping[k] !== h; return `<tr><td><b>${esc(h)}</b></td><td class="ex">${esc(sample(h)) || '<span class="muted">—</span>'}</td><td><select class="input" data-col="${i}" aria-label="Where ${esc(h)} goes">${opts(h)}</select>${dup ? `<div class="err">Another column already goes to ${esc(fieldLabel(k))}, so this one will be skipped.</div>` : ''}${!k && Q.dups[h] ? `<div class="hint">Also looks like ${esc(fieldLabel(Q.dups[h]))}. If it's a different ID, pick its own field or add it as a new one.</div>` : ''}</td></tr>`; }).join('')}
+        </tbody></table></div></div>
+      <div class="stack"><span class="eyebrow">Preview</span>
+      <div class="tablewrap"><table class="pv"><thead><tr>${cols.map(c => `<th>${esc(fieldLabel(c))}</th>`).join('')}<th>Action</th></tr></thead>
+      <tbody>${Q.items.slice(0, 5).map(it => `<tr>${cols.map(c => `<td class="${c === 'desk' || idCols.includes(c) ? 'mono' : ''}">${esc(c === 'desk' ? (it.deskNumber || '') : it.data[c] || '')}</td>`).join('')}<td>${it.existing ? `Update ${esc(it.existing.name || '')}` : 'New'}</td></tr>`).join('')}</tbody></table></div>
+      ${Q.items.length > 5 ? `<span class="sm muted">and ${Q.items.length - 5} more</span>` : ''}</div></div>`);
+  }
+  const nothing = !P.layout && !P.people && !P.areas;
+  if (imp.ignored.length) secs.push(`<p class="sm muted">Sheets not recognised and skipped: ${esc(imp.ignored.join(', '))}. A people sheet needs a Name column; a layout sheet needs Desk, Column and Row.</p>`);
+  dlg.innerHTML = `<h2 id="impTitle" tabindex="-1">Review import</h2>
+    <p class="muted">${esc(imp.fileName)}</p>
+    ${nothing ? `<div class="confirm"><span>Nothing to import. Check that the first row of each sheet holds the column names.</span></div>` : ''}
+    ${secs.join('')}
+    <div class="row2"><button class="btn primary" data-imp="go" ${nothing ? 'disabled' : ''}>Import</button><button class="btn" data-imp="restart">Choose another file</button><span style="flex:1"></span><button class="btn" data-imp="close">Cancel</button></div>`;
+}
+$('#importDialog').addEventListener('change', e => {
+  const el = e.target; if (!el.dataset || el.dataset.col == null || !imp || !imp.found.people) return;
+  const P = imp.found.people, h = P.headers[+el.dataset.col];
+  P.colMap[h] = el.value;
+  const dlg = $('#importDialog'), top = dlg.scrollTop;
+  imp.plan = planAll(imp.found); renderImport(); dlg.scrollTop = top;
+});
+$('#importDialog').addEventListener('click', e => {
+  const b = e.target.closest('[data-imp]'); if (!b) return;
+  const a = b.dataset.imp;
+  if (a === 'close') closeImport();
+  else if (a === 'restart') { imp = null; renderImport(); }
+  else if (a === 'go') runImport();
+  else if (a === 'tplPeople') saveFile('desk-map-people-template.csv', fields().map(f => /[",]/.test(f.label) ? '"' + f.label.replace(/"/g, '""') + '"' : f.label).concat('Desk').join(',') + '\n');
+  else if (a === 'tplLayout') saveFile('desk-map-layout-template.csv', 'Desk,Shape,Column,Row,Rotation\n');
+});
+
+function autoPeopleMap(headers, dups = {}){
+  const fs = fields(), colMap = {}, used = new Set();
+  for (const h of headers) {
+    const n = norm(h); let key = '';
+    if (n) {
+      const f = fs.find(f => fieldNames(f).includes(n));
+      if (f) key = f.k;
+      else if (NAME_PART_ALIASES.firstName.includes(n)) key = 'firstName';
+      else if (NAME_PART_ALIASES.lastName.includes(n)) key = 'lastName';
+      else if (DESK_ALIASES.includes(n)) key = 'desk';
+    }
+    if (key && used.has(key)) { dups[h] = key; key = ''; }
+    if (key) used.add(key);
+    colMap[h] = key;
+  }
+  return colMap;
+}
+function mappingFrom(colMap){
+  const m = {};
+  for (const [h, k] of Object.entries(colMap)) {
+    if (!k) continue;
+    const key = k === '__new__' ? 'new:' + h : k;
+    if (!m[key]) m[key] = h;
+  }
+  return m;
+}
+function mapHeaders(headers, aliases){
+  const mapping = {};
+  for (const h of headers) {
+    const n = norm(h);
+    const key = Object.keys(aliases).find(k => aliases[k].includes(n));
+    if (key && !mapping[key]) mapping[key] = h;
+  }
+  return mapping;
+}
+async function readFile(file){
+  const st = $('#impStatus'); if (st) st.textContent = 'Reading ' + file.name + '…';
+  try {
+    const XLSX = await loadXLSX();
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    const found = { people: null, layout: null, areas: null }; const ignored = [];
+    for (const name of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
+      if (!rows.length) continue;
+      const headers = Object.keys(rows[0]);
+      const am = mapHeaders(headers, AREA_ALIASES), lm = mapHeaders(headers, LAYOUT_ALIASES), dups = {}, cm = autoPeopleMap(headers, dups);
+      const looksLikePeople = Object.values(cm).some(k => k === 'name' || k === 'firstName');
+      if (am.col && am.row && am.w && am.h && !found.areas) found.areas = { sheet: name, rows, mapping: am };
+      else if (lm.desk && lm.col && lm.row && !found.layout) found.layout = { sheet: name, rows, mapping: lm };
+      else if (looksLikePeople && (!found.people || !found.people.looksLikePeople)) { if (found.people) ignored.push(found.people.sheet); found.people = { sheet: name, rows, headers, colMap: cm, autoMap: { ...cm }, dups, looksLikePeople }; }
+      else if (!found.people) found.people = { sheet: name, rows, headers, colMap: cm, autoMap: { ...cm }, dups, looksLikePeople };
+      else ignored.push(name);
+    }
+    imp = { fileName: file.name, found, ignored };
+    imp.plan = planAll(found);
+    renderImport();
+  } catch (err) {
+    if (st) st.textContent = err && err.message === 'load' ? 'The spreadsheet reader could not load. Check your connection and try again.' : 'That file could not be read. Save it as .xlsx or .csv and try again.';
+  }
+}
+function normDate(v){
+  const s = String(v || '').trim(); if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const t = Date.parse(s);
+  if (!isNaN(t)) { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  return s;
+}
+function parseShape(v){
+  const n = norm(v);
+  if (!n || n.startsWith('h')) return 'h';
+  if (n.startsWith('v')) return 'v';
+  if (n.startsWith('c') || n === 'l' || n.startsWith('esq') || n.startsWith('lshape')) return 'corner';
+  return 'h';
+}
+function cleanDeskNum(v){
+  let s = String(v ?? '').trim().replace(/^d\s*-\s*/i, '');
+  if (/^\d+$/.test(s)) s = String(parseInt(s, 10));
+  return s;
+}
+function findDeskByNumber(v, list){
+  const s = cleanDeskNum(v); if (!s) return null;
+  const n = norm(s);
+  const hit = list.find(d => norm(d.number) === n);
+  if (hit) return hit;
+  if (/^\d+$/.test(s)) { const num = parseInt(s, 10); const c = list.filter(d => deskNumParts(d.number)?.n === num); if (c.length === 1) return c[0]; }
+  return null;
+}
+function planAll(found){
+  const plan = {};
+  // final desk list after the layout import, used to resolve people's desk numbers
+  const finalDesks = new Map(desksArr().map(d => [d.id, { ...d }]));
+  if (found.layout) {
+    const m = found.layout.mapping;
+    const byNum = new Map(desksArr().map(d => [norm(d.number), d]));
+    const items = []; let created = 0, updated = 0, skipped = 0;
+    const seen = new Set();
+    for (const r of found.layout.rows) {
+      const number = cleanDeskNum(r[m.desk]);
+      const x = parseInt(r[m.col], 10), y = parseInt(r[m.row], 10);
+      if (!number || isNaN(x) || isNaN(y) || x < 0 || y < 0 || seen.has(norm(number))) { skipped++; continue; }
+      seen.add(norm(number));
+      const shape = m.shape ? parseShape(r[m.shape]) : 'h';
+      let rot = m.rot ? ((parseInt(r[m.rot], 10) || 0) % 360 + 360) % 360 : 0;
+      rot = shape === 'corner' ? [0, 90, 180, 270].includes(rot) ? rot : 0 : 0;
+      const ex = byNum.get(norm(number));
+      const id = ex ? ex.id : uid('d');
+      ex ? updated++ : created++;
+      items.push({ id, existing: !!ex, data: { number, shape, rot, x, y } });
+      finalDesks.set(id, { ...(ex || { personId: null }), id, number, shape, rot, x, y });
+    }
+    // overlaps in the final layout
+    const cellCount = new Map(); let overlaps = 0;
+    for (const d of finalDesks.values()) for (const c of cellsOf(d.shape, d.rot || 0, d.x, d.y)) cellCount.set(c, (cellCount.get(c) || 0) + 1);
+    for (const d of finalDesks.values()) if (cellsOf(d.shape, d.rot || 0, d.x, d.y).some(c => cellCount.get(c) > 1)) overlaps++;
+    plan.layout = { sheet: found.layout.sheet, items, created, updated, skipped, overlaps };
+  }
+  if (found.areas) {
+    const m = found.areas.mapping;
+    const byName = new Map([...state.zones.values()].map(z => [norm(z.name), z]));
+    const items = []; let created = 0, updated = 0;
+    found.areas.rows.forEach((r, i) => {
+      const x = parseInt(r[m.col], 10), y = parseInt(r[m.row], 10), w = parseInt(r[m.w], 10), h = parseInt(r[m.h], 10);
+      if ([x, y, w, h].some(isNaN) || w < 1 || h < 1) return;
+      const name = m.area ? String(r[m.area] ?? '').trim() || `Area ${i + 1}` : `Area ${i + 1}`;
+      const ex = byName.get(norm(name));
+      ex ? updated++ : created++;
+      items.push({ id: ex ? ex.id : uid('z'), data: { name, x: Math.max(0, x), y: Math.max(0, y), w, h } });
+    });
+    plan.areas = { sheet: found.areas.sheet, items, created, updated };
+  }
+  if (found.people) {
+    const m = mappingFrom(found.people.colMap);
+    const list = [...finalDesks.values()];
+    const fs = fields();
+    const matchFs = fs.filter(f => f.match);
+    const idx = new Map(matchFs.map(f => [f.k, new Map()]));
+    for (const p of state.people.values()) for (const f of matchFs) { const v = norm(p[f.k]); if (v && !idx.get(f.k).has(v)) idx.get(f.k).set(v, p); }
+    const items = []; let skipped = 0, created = 0, updated = 0, seated = 0; const missing = new Set();
+    for (const r of found.people.rows) {
+      const data = {};
+      for (const f of fs) if (m[f.k]) data[f.k] = String(r[m[f.k]] ?? '').trim();
+      for (const key of Object.keys(m)) if (key.startsWith('new:')) data[key] = String(r[m[key]] ?? '').trim();
+      if (!data.name && (m.firstName || m.lastName)) data.name = [m.firstName ? r[m.firstName] : '', m.lastName ? r[m.lastName] : ''].map(x => String(x ?? '').trim()).filter(Boolean).join(' ');
+      if (!data.name) { skipped++; continue; }
+      for (const f of fs) if (f.type === 'date' && data[f.k]) data[f.k] = normDate(data[f.k]);
+      let existing = null;
+      for (const f of matchFs) { const v = norm(data[f.k]); const hit = v && idx.get(f.k).get(v); if (hit) { existing = hit; break; } }
+      const deskNumber = m.desk ? String(r[m.desk] ?? '').trim() : '';
+      const desk = deskNumber ? findDeskByNumber(deskNumber, list) : null;
+      if (deskNumber && !desk) missing.add(deskNumber);
+      if (desk) seated++;
+      existing ? updated++ : created++;
+      items.push({ data, existing, deskNumber, deskId: desk ? desk.id : null });
+    }
+    plan.people = { sheet: found.people.sheet, headers: found.people.headers, rows: found.people.rows, colMap: found.people.colMap, autoMap: found.people.autoMap, dups: found.people.dups || {}, mapping: m, items, skipped, created, updated, seated, missingDesks: [...missing] };
+  }
+  return plan;
+}
+function runImport(){
+  const P = imp.plan; const done = [];
+  if (P.layout) {
+    for (const it of P.layout.items) {
+      const cur = state.desks.get(it.id);
+      setRec('desks', { ...(cur || { personId: null }), id: it.id, ...it.data });
+    }
+    done.push(`${P.layout.items.length} desks`);
+  }
+  if (P.areas) {
+    for (const it of P.areas.items) setRec('zones', { id: it.id, ...it.data });
+    done.push(`${P.areas.items.length} areas`);
+  }
+  if (P.people) {
+    const fs = fields().map(f => ({ ...f, aliases: [...(f.aliases || [])] }));
+    let changed = false; const newKeys = {};
+    const dropAlias = (n, except) => { for (const f of fs) if (f !== except) { const before = f.aliases.length; f.aliases = f.aliases.filter(a => norm(a) !== n); if (f.aliases.length !== before) changed = true; } };
+    for (const [h, k] of Object.entries(P.people.colMap)) {
+      const n = norm(h); if (!n) continue;
+      if (k === '__new__') {
+        const nf = makeField(uid('f'), String(h).trim(), 'text', {}); fs.push(nf); newKeys['new:' + h] = nf.k; dropAlias(n, nf); changed = true;
+      } else if (k && !['desk', 'firstName', 'lastName'].includes(k)) {
+        const f = fs.find(x => x.k === k);
+        if (f && !fieldNames(f).includes(n)) { f.aliases.push(String(h).trim()); changed = true; }
+        if (f) dropAlias(n, f);
+      } else if (!k) {
+        const was = P.people.autoMap[h];
+        if (was && !['desk', 'firstName', 'lastName'].includes(was)) { const f = fs.find(x => x.k === was); if (f) { const before = f.aliases.length; f.aliases = f.aliases.filter(a => norm(a) !== n); if (f.aliases.length !== before) changed = true; } }
+      }
+    }
+    if (changed) saveFields(fs);
+    for (const it of P.people.items) for (const [tmp, real] of Object.entries(newKeys)) if (tmp in it.data) { it.data[real] = it.data[tmp]; delete it.data[tmp]; }
+    for (const it of P.people.items) {
+      let p;
+      if (it.existing) {
+        const merged = { ...(state.people.get(it.existing.id) || it.existing) };
+        for (const [k, v] of Object.entries(it.data)) if (v) merged[k] = v;
+        delete merged.example;
+        p = merged;
+      } else p = { id: uid('p'), ...it.data };
+      setRec('people', p); it.pid = p.id;
+    }
+    for (const it of P.people.items) {
+      if (!it.deskId || !state.desks.has(it.deskId)) continue;
+      const from = seatIndex().get(it.pid);
+      if (from && from.id !== it.deskId) patchRec('desks', from.id, { personId: null });
+      patchRec('desks', it.deskId, { personId: it.pid });
+    }
+    done.push(`${P.people.items.length} people`);
+  }
+  closeImport(); state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null;
+  render(true);
+  requestAnimationFrame(() => requestAnimationFrame(fitToScreen));
+  toast(`Imported ${done.join(', ')}`);
+}
+
+async function saveFile(filename, data){
+  const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+async function exportXlsx(){
+  try {
+    const XLSX = await loadXLSX();
+    const si = seatIndex();
+    const peopleRows = peopleArr().map(p => {
+      const o = {};
+      for (const f of fields()) o[f.label] = p[f.k] || '';
+      o['Desk'] = si.get(p.id)?.number || '';
+      return o;
+    });
+    const deskRows = desksArr().sort(byNumber).map(d => {
+      const p = d.personId ? state.people.get(d.personId) : null;
+      return { 'Desk': d.number, 'Shape': SHAPES[d.shape]?.label || d.shape, 'Column': d.x, 'Row': d.y, 'Rotation': d.rot || 0, 'Seated': p ? p.name : '', 'Seated team': p ? (p.team || '') : '' };
+    });
+    const areaRows = [...state.zones.values()].map(z => ({ 'Area': z.name, 'Column': z.x, 'Row': z.y, 'Width': z.w, 'Height': z.h }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, peopleRows.length ? XLSX.utils.json_to_sheet(peopleRows) : XLSX.utils.aoa_to_sheet([fields().map(f => f.label).concat('Desk')]), 'People');
+    XLSX.utils.book_append_sheet(wb, deskRows.length ? XLSX.utils.json_to_sheet(deskRows) : XLSX.utils.aoa_to_sheet([['Desk','Shape','Column','Row','Rotation']]), 'Desks');
+    XLSX.utils.book_append_sheet(wb, areaRows.length ? XLSX.utils.json_to_sheet(areaRows) : XLSX.utils.aoa_to_sheet([['Area','Column','Row','Width','Height']]), 'Areas');
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    await saveFile('office-desk-map.xlsx', new Blob([out]));
+  } catch { toast('Excel export needs an internet connection. Use Data → Download backup to save a copy offline.'); }
+}
+
+/* ---------- export dialog ---------- */
+let cadOpts = { squareCm: 40, names: true };
+function openExport(){
+  imp = null;
+  const dlg = $('#importDialog');
+  dlg.innerHTML = `<h2 id="impTitle" tabindex="-1">Export</h2>
+    <div class="impsec"><h3>Excel workbook (.xlsx)</h3>
+      <p class="sm muted">People, desks and areas on separate sheets. You can edit it and import it again, so it also works as a backup.</p>
+      <div><button class="btn primary" data-exp="xlsx">Download Excel workbook</button></div></div>
+    <div class="impsec"><h3>CAD drawing (.dxf)</h3>
+      <p class="sm muted">Opens in AutoCAD, LibreCAD, DraftSight, BricsCAD and most other CAD programs. Desk outlines, desk numbers, names and areas each go on their own layer, drawn to scale in millimetres. In AutoCAD you can then use Save As to get a .dwg.</p>
+      <div class="grid2">
+        <div class="stack"><label class="l" for="cadSq">Size of one grid square (cm)</label><input class="input mono" id="cadSq" type="number" min="5" max="200" step="1" value="${cadOpts.squareCm}"></div>
+        <div class="stack" style="justify-content:flex-end"><span class="sm muted" id="cadHint"></span></div>
+      </div>
+      <label class="check" for="cadNames"><input type="checkbox" id="cadNames" ${cadOpts.names ? 'checked' : ''}>Include people's names</label>
+      <p class="sm muted">Units are millimetres. Layers: DESKS, DESK-NUMBERS, NAMES, AREAS, AREA-NAMES.</p>
+      <div><button class="btn primary" data-exp="dxf">Download CAD drawing</button></div></div>
+    <div class="row2"><span style="flex:1"></span><button class="btn" data-exp="close">Close</button></div>`;
+  updateCadHint();
+  $('#importOverlay').hidden = false;
+  requestAnimationFrame(() => $('#impTitle')?.focus());
+}
+function readCadOpts(){
+  const n = parseFloat($('#cadSq')?.value);
+  cadOpts = { squareCm: isNaN(n) ? 40 : clamp(n, 5, 200), names: !!$('#cadNames')?.checked };
+  return cadOpts;
+}
+function updateCadHint(){
+  const el = $('#cadHint'); if (!el) return;
+  const o = readCadOpts(), s = o.squareCm;
+  el.textContent = `A horizontal desk will be ${4 * s} × ${2 * s} cm.`;
+}
+$('#exportBtn').addEventListener('click', openExport);
+$('#importDialog').addEventListener('input', e => { if (e.target.id === 'cadSq') updateCadHint(); });
+$('#importDialog').addEventListener('click', async e => {
+  const b = e.target.closest('[data-exp]'); if (!b) return;
+  const a = b.dataset.exp;
+  if (a === 'close') closeImport();
+  else if (a === 'xlsx') exportXlsx();
+  else if (a === 'dxf') exportDxf();
+});
+async function exportDxf(){
+  const o = readCadOpts();
+  try {
+    const dxf = buildDXF(desksArr(), [...state.zones.values()], state.people, { squareMM: o.squareCm * 10, names: o.names });
+    const today = new Date().toISOString().slice(0, 10);
+    const readme = [
+      'Office Desk Map - CAD export, ' + today,
+      '',
+      'Open office-desk-map.dxf in AutoCAD, LibreCAD, DraftSight, BricsCAD or another CAD program.',
+      'Units: millimetres. One grid square of the map = ' + (o.squareCm * 10) + ' mm.',
+      'Layers: DESKS (outlines), DESK-NUMBERS, NAMES, AREAS (outlines), AREA-NAMES.',
+      'The top of the map is the top of the drawing.'
+    ].join('\r\n');
+    void readme;
+    await saveFile('office-desk-map.dxf', new Blob([dxf], { type: 'application/dxf' }));
+  } catch { toast('The CAD drawing could not be prepared.'); }
+}
+
+/* ---------- DXF (AutoCAD R12 ASCII) ---------- */
+// @@DXF-START
+function dxfText(s){
+  return String(s).replace(/[\r\n]+/g, ' ').replace(/[^\x20-\x7e]/g, ch => '\\U+' + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'));
+}
+function dxfShortName(name){
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] || '';
+  return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
+}
+function buildDXF(desks, zones, people, opts){
+  const S = opts.squareMM;
+  const out = [];
+  const g = (code, val) => { out.push(String(code), String(val)); };
+  const r3 = v => Math.round(v * 1000) / 1000;
+  const P = (x, y) => [r3(x * S), r3(-y * S)]; // map grid (y down) to drawing (y up)
+  const SIZE = { h: [4, 2], v: [2, 4], corner: [4, 4] };
+  const layers = [['DESKS', 7], ['DESK-NUMBERS', 1], ['NAMES', 5], ['AREAS', 8], ['AREA-NAMES', 8]];
+
+  g(0, 'SECTION'); g(2, 'HEADER');
+  g(9, '$ACADVER'); g(1, 'AC1009');
+  g(9, '$INSUNITS'); g(70, 4);
+  g(0, 'ENDSEC');
+
+  g(0, 'SECTION'); g(2, 'TABLES');
+  g(0, 'TABLE'); g(2, 'LTYPE'); g(70, 1);
+  g(0, 'LTYPE'); g(2, 'CONTINUOUS'); g(70, 0); g(3, 'Solid line'); g(72, 65); g(73, 0); g(40, 0);
+  g(0, 'ENDTAB');
+  g(0, 'TABLE'); g(2, 'LAYER'); g(70, layers.length);
+  for (const [n, c] of layers) { g(0, 'LAYER'); g(2, n); g(70, 0); g(62, c); g(6, 'CONTINUOUS'); }
+  g(0, 'ENDTAB');
+  g(0, 'ENDSEC');
+
+  g(0, 'SECTION'); g(2, 'ENTITIES');
+  const poly = (layer, pts) => {
+    g(0, 'POLYLINE'); g(8, layer); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, 1);
+    for (const [x, y] of pts) { g(0, 'VERTEX'); g(8, layer); g(10, x); g(20, y); g(30, 0); }
+    g(0, 'SEQEND'); g(8, layer);
+  };
+  // h: 0 left 1 centre; v: 1 bottom 2 middle 3 top
+  const text = (layer, [x, y], height, str, rot = 0, h = 1, v = 2) => {
+    if (!str) return;
+    g(0, 'TEXT'); g(8, layer); g(10, x); g(20, y); g(30, 0); g(40, r3(height)); g(1, dxfText(str));
+    if (rot) g(50, rot);
+    g(72, h); g(11, x); g(21, y); g(31, 0); g(73, v);
+  };
+
+  for (const z of zones) {
+    poly('AREAS', [P(z.x, z.y), P(z.x + z.w, z.y), P(z.x + z.w, z.y + z.h), P(z.x, z.y + z.h)]);
+    text('AREA-NAMES', P(z.x + 0.4, z.y + 0.4), 0.6 * S, z.name || 'Area', 0, 0, 3);
+  }
+
+  for (const d of desks) {
+    const shape = SIZE[d.shape] ? d.shape : 'h';
+    const [w, h] = SIZE[shape];
+    const rot = d.rot || 0;
+    let pts;
+    if (shape === 'corner') {
+      const t = rot * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+      pts = [[0,0],[4,0],[4,2],[2,2],[2,4],[0,4]].map(([px, py]) => {
+        const dx = px - 2, dy = py - 2;
+        return P(d.x + r3(2 + dx * c - dy * s), d.y + r3(2 + dx * s + dy * c));
+      });
+    } else {
+      pts = [P(d.x, d.y), P(d.x + w, d.y), P(d.x + w, d.y + h), P(d.x, d.y + h)];
+    }
+    poly('DESKS', pts);
+
+    // label centre, matching where the map draws it
+    let cx = d.x + w / 2, cy = d.y + h / 2;
+    if (shape === 'corner') cy = d.y + (rot === 180 || rot === 270 ? 3 : 1);
+    const p = d.personId && people.get(d.personId);
+    const name = opts.names && p ? dxfShortName(p.name) : '';
+    const nH = 0.38 * S, mH = 0.3 * S;
+    if (shape === 'v') {
+      // text runs bottom to top; the first line sits to the left
+      text('DESK-NUMBERS', P(name ? cx - 0.3 : cx, cy), nH, d.number, 90);
+      text('NAMES', P(cx + 0.35, cy), mH, name, 90);
+    } else {
+      text('DESK-NUMBERS', P(cx, name ? cy - 0.3 : cy), nH, d.number);
+      text('NAMES', P(cx, cy + 0.35), mH, name);
+    }
+  }
+  g(0, 'ENDSEC');
+  g(0, 'EOF');
+  return out.join('\r\n') + '\r\n';
+}
+
+/* ---------- zip (stored, no compression) ---------- */
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes){ let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files){
+  const enc = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  const d = new Date();
+  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(10, time, true); lh.setUint16(12, date, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true); lh.setUint16(26, name.length, true);
+    parts.push(new Uint8Array(lh.buffer), name, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(12, time, true); ch.setUint16(14, date, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true); ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + size;
+  }
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+// @@DXF-END
+
+/* ---------- standalone storage: this browser + an optional linked data file ---------- */
+const LS_KEY = 'office-desk-map:v1';
+const LS_META = 'office-desk-map:v1:fileSyncedAt';
+const fsSupported = typeof window.showOpenFilePicker === 'function' && typeof window.showSaveFilePicker === 'function';
+const store = { lsOk: true, handle: null, fileName: '', filePerm: 'none', fileError: null, saveTimer: null, saving: false, conflict: null, pending: null };
+
+function sync(){
+  clearTimeout(store.saveTimer);
+  store.saving = true; renderSaveChip();
+  store.saveTimer = setTimeout(saveNow, 300);
+}
+function snapshot(){
+  const rows = m => [...m.values()].map(r => ({ ...r }));
+  return { app: 'office-desk-map', version: 1, savedAt: new Date().toISOString(), desks: rows(state.desks), people: rows(state.people), zones: rows(state.zones), settings: rows(state.settings) };
+}
+function validSnapshot(d){ return d && Array.isArray(d.desks) && Array.isArray(d.people); }
+function applySnapshot(d){
+  if (!validSnapshot(d)) throw new Error('format');
+  const m = arr => new Map((arr || []).filter(r => r && r.id != null).map(r => [String(r.id), { ...r, id: String(r.id) }]));
+  state.desks = m(d.desks); state.people = m(d.people); state.zones = m(d.zones); state.settings = m(d.settings);
+  state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null; state.confirm = null; state.didFit = false; state.fieldsDraft = null; if (state.panelMode === 'fields') state.panelMode = null;
+}
+function lsGet(k){ try { return localStorage.getItem(k); } catch { store.lsOk = false; return null; } }
+function lsSet(k, v){ try { localStorage.setItem(k, v); store.lsOk = true; return true; } catch { store.lsOk = false; return false; } }
+function lsDel(k){ try { localStorage.removeItem(k); } catch {} }
+
+async function saveNow(){
+  clearTimeout(store.saveTimer); store.saveTimer = null;
+  const snap = snapshot();
+  lsSet(LS_KEY, JSON.stringify(snap));
+  if (store.handle && store.filePerm === 'granted' && !store.conflict) {
+    try {
+      const w = await store.handle.createWritable();
+      await w.write(JSON.stringify(snap, null, 2));
+      await w.close();
+      lsSet(LS_META, snap.savedAt);
+      store.fileError = null;
+    } catch (e) {
+      store.fileError = 'write';
+      try { store.filePerm = await store.handle.queryPermission({ mode: 'readwrite' }); } catch {}
+    }
+  }
+  store.saving = false;
+  renderSaveChip(); renderNotices();
+}
+// keep the browser copy when the tab closes mid-save
+window.addEventListener('pagehide', () => { if (store.saveTimer) { clearTimeout(store.saveTimer); lsSet(LS_KEY, JSON.stringify(snapshot())); } });
+
+/* the linked file handle is remembered between visits in IndexedDB */
+function idb(){ return new Promise((res, rej) => { const r = indexedDB.open('office-desk-map', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function kv(mode, key, val){
+  const d = await idb();
+  return new Promise((res, rej) => {
+    const t = d.transaction('kv', mode === 'get' ? 'readonly' : 'readwrite'), s = t.objectStore('kv');
+    const r = mode === 'get' ? s.get(key) : mode === 'del' ? s.delete(key) : s.put(val, key);
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+
+async function readHandle(h){ const t = await (await h.getFile()).text(); return t.trim() ? JSON.parse(t) : null; }
+function adoptFile(data){
+  applySnapshot(data);
+  lsSet(LS_KEY, JSON.stringify(data));
+  if (data.savedAt) lsSet(LS_META, data.savedAt);
+}
+// decide which copy wins when a linked file is available
+async function syncWithFile(local){
+  let fileData;
+  try { fileData = await readHandle(store.handle); }
+  catch { store.fileError = 'read'; return; }
+  if (fileData && !validSnapshot(fileData)) { store.fileError = 'format'; return; }
+  const synced = lsGet(LS_META);
+  if (!fileData) { await saveNow(); return; }
+  if (!local) { adoptFile(fileData); return; }
+  const localNew = !synced || (local.savedAt || '') > synced;
+  const fileNew = !synced || (fileData.savedAt || '') > synced;
+  if (localNew && fileNew && local.savedAt !== fileData.savedAt) { store.conflict = fileData; return; }
+  if (localNew && !fileNew) await saveNow(); else adoptFile(fileData);
+}
+async function linkFile(create){
+  if (!fsSupported) return;
+  const types = [{ description: 'Desk map data', accept: { 'application/json': ['.json'] } }];
+  let h;
+  try { h = create ? await window.showSaveFilePicker({ suggestedName: 'desk-map-data.json', types }) : (await window.showOpenFilePicker({ types, multiple: false }))[0]; }
+  catch { return; } // picker closed
+  let perm = 'prompt';
+  try { perm = await h.requestPermission({ mode: 'readwrite' }); } catch {}
+  if (perm !== 'granted') { toast('The browser needs permission to write to that file. Try again and choose Allow.'); return; }
+  if (!create) {
+    let data;
+    try { data = await readHandle(h); } catch { toast('That file could not be read.'); return; }
+    if (data && !validSnapshot(data)) { toast("That file isn't a desk map data file."); return; }
+    store.handle = h; store.fileName = h.name; store.filePerm = 'granted'; store.conflict = null; store.fileError = null;
+    if (data) adoptFile(data); else await saveNow();
+  } else {
+    store.handle = h; store.fileName = h.name; store.filePerm = 'granted'; store.conflict = null; store.fileError = null;
+    await saveNow();
+  }
+  try { await kv('put', 'handle', h); } catch {}
+  closeImport(); render(true);
+  requestAnimationFrame(() => requestAnimationFrame(fitToScreen));
+  toast(create ? `Saving to ${h.name} from now on` : `Opened ${h.name}. Changes will be saved to it.`);
+}
+async function unlinkFile(){
+  store.handle = null; store.fileName = ''; store.filePerm = 'none'; store.fileError = null; store.conflict = null;
+  lsDel(LS_META);
+  try { await kv('del', 'handle'); } catch {}
+  render(true); openData(); toast('No longer saving to a file. Changes are saved in this browser.');
+}
+async function reconnectFile(){
+  if (!store.handle) return;
+  try { store.filePerm = await store.handle.requestPermission({ mode: 'readwrite' }); } catch { store.filePerm = 'prompt'; }
+  if (store.filePerm !== 'granted') { toast('Permission not given. Changes are still saved in this browser.'); renderNotices(); return; }
+  store.fileError = null;
+  let local = null; try { local = JSON.parse(lsGet(LS_KEY) || 'null'); } catch {}
+  await syncWithFile(local);
+  render(true); renderSaveChip();
+  if (!store.conflict && !store.fileError) toast(`Connected to ${store.fileName}`);
+}
+
+function renderSaveChip(){
+  const el = document.getElementById('saveChip'); if (!el) return;
+  let txt, cls = '';
+  if (store.handle && store.filePerm === 'granted' && !store.fileError && !store.conflict) txt = store.saving ? `Saving to ${store.fileName}…` : `Saved to ${store.fileName}`;
+  else if (store.handle) { txt = `Not connected to ${store.fileName}`; cls = 'warn'; }
+  else if (!store.lsOk) { txt = 'Not saved'; cls = 'warn'; }
+  else txt = store.saving ? 'Saving…' : 'Saved in this browser';
+  el.textContent = txt; el.className = 'savechip ' + cls;
+}
+function storageNotices(){
+  const out = [];
+  if (store.conflict) {
+    const f = store.conflict;
+    out.push(`<div class="notice"><p><b>${esc(store.fileName)} changed somewhere else</b> (saved ${esc(fmtStamp(f.savedAt))}), and this browser also has changes that aren't in the file. Which version do you want to keep?</p><div class="row"><button class="btn small primary" data-act="useFile">Use the file (${f.desks.length} desks, ${f.people.length} people)</button><button class="btn small" data-act="keepLocal">Keep this browser's version</button></div></div>`);
+  } else if (store.handle && (store.filePerm !== 'granted' || store.fileError === 'write')) {
+    out.push(`<div class="notice"><p>This map saves to <b>${esc(store.fileName)}</b>, but the browser needs your OK again before it can write to it. Until then, changes are kept in this browser.</p><div class="row"><button class="btn small primary" data-act="reconnectFile">Reconnect</button></div></div>`);
+  } else if (store.fileError === 'read' || store.fileError === 'format') {
+    out.push(`<div class="notice"><p><b>${esc(store.fileName)}</b> couldn't be read${store.fileError === 'format' ? " because it isn't a desk map data file" : ''}, so it may have been moved or renamed. Changes are kept in this browser.</p><div class="row"><button class="btn small" data-act="openData">Choose the file again</button></div></div>`);
+  }
+  if (!store.lsOk && !(store.handle && store.filePerm === 'granted')) {
+    out.push(`<div class="notice"><p>This browser isn't letting the page save, so changes last only until you close it. Link a data file or download a backup from Data to keep them.</p><div class="row"><button class="btn small" data-act="openData">Open Data</button></div></div>`);
+  }
+  return out.join('');
+}
+function fmtStamp(iso){ const d = new Date(iso); return isNaN(d) ? 'earlier' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+
+/* ---------- data dialog ---------- */
+function openData(){
+  imp = null;
+  const linked = !!store.handle;
+  const served = /^https?:$/.test(location.protocol);
+  const p = store.pending;
+  $('#importDialog').innerHTML = `<h2 id="impTitle" tabindex="-1">Data</h2>
+    <p class="muted">${linked
+      ? `Every change is saved to <b>${esc(store.fileName)}</b> and to this browser.`
+      : `Every change is saved in this browser on this computer. Clearing the browser's site data would erase it, so link a data file or keep a backup.`}</p>
+    <div class="impsec"><h3>Save to a file in a folder</h3>
+      ${fsSupported ? `<p class="sm muted">Keep the map in a JSON file next to this page, in a shared or synced folder, or in a git repo. Changes are written to it automatically, and anyone who opens the file from this page sees the same map. Only one person should edit at a time.</p>
+        <div class="row2">${linked
+          ? `<span class="pill ok">${esc(store.fileName)}</span><button class="btn small" data-data="open">Switch to another file…</button><button class="btn small ghost" data-data="unlink">Stop saving to this file</button>`
+          : `<button class="btn small primary" data-data="create">Create a data file…</button><button class="btn small" data-data="open">Open an existing data file…</button>`}</div>
+        <p class="sm muted">Opening a file replaces what's on the map with the file's contents. Creating one saves the current map into it.</p>`
+      : `<p class="sm muted">This browser can't save straight to a file. That works in Chrome and Edge. Here, use the backup buttons below to move data in and out of a file.</p>`}
+    </div>
+    <div class="impsec"><h3>Backup file (.json)</h3>
+      <p class="sm muted">A complete copy of desks, people and areas. Load it here or in another browser to restore the map exactly.</p>
+      <div class="row2"><button class="btn small" data-data="download">Download backup</button><label class="btn small" for="backupFile" style="cursor:pointer">Load a backup…</label><input type="file" id="backupFile" accept=".json,application/json" hidden></div>
+      ${served ? `<div class="row2"><button class="btn small ghost" data-data="fromSite">Reload desk-map-data.json from this site</button></div>` : ''}
+      ${p ? `<div class="confirm"><span>Replace everything on the map with <b>${esc(p.name)}</b> (${p.data.desks.length} desks, ${p.data.people.length} people, ${(p.data.zones || []).length} areas${p.data.savedAt ? `, saved ${esc(fmtStamp(p.data.savedAt))}` : ''})?</span><div class="row2"><button class="btn small danger solid" data-data="replace">Replace the map</button><button class="btn small" data-data="cancelReplace">Cancel</button></div></div>` : ''}
+    </div>
+    <div class="row2"><span style="flex:1"></span><button class="btn" data-data="close">Close</button></div>`;
+  $('#importOverlay').hidden = false;
+  const fi = $('#backupFile');
+  fi.addEventListener('change', async () => {
+    const f = fi.files[0]; if (!f) return;
+    try { const data = JSON.parse(await f.text()); if (!validSnapshot(data)) throw 0; store.pending = { name: f.name, data }; }
+    catch { toast("That file isn't a desk map backup."); store.pending = null; }
+    openData();
+  });
+  requestAnimationFrame(() => $('#impTitle')?.focus());
+}
+$('#importDialog').addEventListener('click', async e => {
+  const b = e.target.closest('[data-data]'); if (!b) return;
+  switch (b.dataset.data) {
+    case 'close': store.pending = null; closeImport(); break;
+    case 'create': linkFile(true); break;
+    case 'open': linkFile(false); break;
+    case 'unlink': unlinkFile(); break;
+    case 'download': saveFile(`desk-map-backup-${new Date().toISOString().slice(0, 10)}.json`, new Blob([JSON.stringify(snapshot(), null, 2)], { type: 'application/json' })); break;
+    case 'cancelReplace': store.pending = null; openData(); break;
+    case 'replace': {
+      const p = store.pending; store.pending = null;
+      applySnapshot(p.data); await saveNow(); closeImport(); render(true);
+      requestAnimationFrame(() => requestAnimationFrame(fitToScreen));
+      toast(`Map replaced with ${p.name}`); break;
+    }
+    case 'fromSite': {
+      try { const r = await fetch('desk-map-data.json', { cache: 'no-store' }); if (!r.ok) throw 0; const data = await r.json(); if (!validSnapshot(data)) throw 0; store.pending = { name: 'desk-map-data.json', data }; }
+      catch { toast('No desk-map-data.json was found next to this page.'); }
+      openData(); break;
+    }
+  }
+});
+
+/* ---------- startup ---------- */
+async function init(){
+  downloads = true;
+  render();
+  let local = null;
+  try { local = JSON.parse(lsGet(LS_KEY) || 'null'); } catch { local = null; }
+  if (local && validSnapshot(local)) applySnapshot(local); else local = null;
+  if (fsSupported) {
+    try {
+      const h = await kv('get', 'handle');
+      if (h) {
+        store.handle = h; store.fileName = h.name;
+        store.filePerm = await h.queryPermission({ mode: 'readwrite' });
+        if (store.filePerm === 'granted') await syncWithFile(local);
+      }
+    } catch {}
+  }
+  // first visit: start from desk-map-data.json if it sits next to the page (served from a folder, repo or intranet)
+  if (!local && !store.handle) {
+    try { const r = await fetch('desk-map-data.json', { cache: 'no-store' }); if (r.ok) { const data = await r.json(); if (validSnapshot(data)) { applySnapshot(data); lsSet(LS_KEY, JSON.stringify(data)); } } } catch {}
+  }
+  state.loaded = true;
+  render(true); renderSaveChip();
+}
+init();
+})();
+</script>
+</body>
+</html>

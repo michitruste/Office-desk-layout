@@ -1,0 +1,430 @@
+{
+  "app": "office-desk-map",
+  "version": 1,
+  "savedAt": "2026-10-27T01:42:08.000Z",
+  "desks": [
+    {
+      "id": "d_04293cd2cbd244",
+      "number": "3",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 2,
+      "y": 4
+    },
+    {
+      "id": "d_0d01cf16b8d74b",
+      "number": "24",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 21,
+      "y": 19
+    },
+    {
+      "id": "d_12130ea8432643",
+      "number": "22",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 13,
+      "y": 19
+    },
+    {
+      "id": "d_13190844d9b34f",
+      "number": "14",
+      "personId": null,
+      "rot": 180,
+      "shape": "corner",
+      "x": 10,
+      "y": 14
+    },
+    {
+      "id": "d_19cced2a713e4a",
+      "number": "5",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 13,
+      "y": 2
+    },
+    {
+      "id": "d_1d69c9167adb49",
+      "number": "20",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 5,
+      "y": 19
+    },
+    {
+      "id": "d_282412a76e6143",
+      "number": "10",
+      "personId": null,
+      "rot": 0,
+      "shape": "v",
+      "x": 2,
+      "y": 13
+    },
+    {
+      "id": "d_41d1579327fa4c",
+      "number": "16",
+      "personId": null,
+      "rot": 0,
+      "shape": "v",
+      "x": 19,
+      "y": 9
+    },
+    {
+      "id": "d_4cdecffac0b84a",
+      "number": "4",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 6,
+      "y": 4
+    },
+    {
+      "id": "d_5048f0531b964d",
+      "number": "12",
+      "personId": null,
+      "rot": 90,
+      "shape": "corner",
+      "x": 10,
+      "y": 10
+    },
+    {
+      "id": "d_51b455d999a847",
+      "number": "1",
+      "personId": "p02",
+      "rot": 0,
+      "shape": "h",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "id": "d_5df3827efa3949",
+      "number": "17",
+      "personId": null,
+      "rot": 0,
+      "shape": "v",
+      "x": 17,
+      "y": 13
+    },
+    {
+      "id": "d_7ad09e8118c24f",
+      "number": "2",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 6,
+      "y": 2
+    },
+    {
+      "id": "d_7bee373c1bda4a",
+      "number": "23",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 17,
+      "y": 19
+    },
+    {
+      "id": "d_86b33b32b62447",
+      "number": "19",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 1,
+      "y": 19
+    },
+    {
+      "id": "d_99b0dc668ea14a",
+      "number": "9",
+      "personId": null,
+      "rot": 0,
+      "shape": "v",
+      "x": 2,
+      "y": 9
+    },
+    {
+      "id": "d_9eb28ea2052f4a",
+      "number": "11",
+      "personId": null,
+      "rot": 0,
+      "shape": "corner",
+      "x": 6,
+      "y": 10
+    },
+    {
+      "id": "d_a37fde87730c4d",
+      "number": "18",
+      "personId": null,
+      "rot": 0,
+      "shape": "v",
+      "x": 19,
+      "y": 13
+    },
+    {
+      "id": "d_b9ba22ddcc2d42",
+      "number": "13",
+      "personId": null,
+      "rot": 270,
+      "shape": "corner",
+      "x": 6,
+      "y": 14
+    },
+    {
+      "id": "d_bc3df927908544",
+      "number": "15",
+      "personId": null,
+      "rot": 0,
+      "shape": "v",
+      "x": 17,
+      "y": 9
+    },
+    {
+      "id": "d_d8661503a9f644",
+      "number": "6",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 17,
+      "y": 2
+    },
+    {
+      "id": "d_eb431b1e11f542",
+      "number": "21",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 9,
+      "y": 19
+    },
+    {
+      "id": "d_ed0fcb27b03d48",
+      "number": "7",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 13,
+      "y": 4
+    },
+    {
+      "id": "d_f75c5859e44943",
+      "number": "8",
+      "personId": null,
+      "rot": 0,
+      "shape": "h",
+      "x": 17,
+      "y": 4
+    }
+  ],
+  "people": [
+    {
+      "id": "p01",
+      "companyTeamLead": "Diana Ortiz",
+      "computerTag": "PC-0231",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Mark Ellison",
+      "email": "laura.mendez@example.com",
+      "employeeId": "EMP-1042",
+      "example": true,
+      "name": "Laura Méndez",
+      "notes": "",
+      "startDate": "2023-03-14",
+      "supervisor": "Carlos Rivas",
+      "team": "Billing Support"
+    },
+    {
+      "id": "p02",
+      "companyTeamLead": "Diana Ortiz",
+      "computerTag": "PC-0244",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Mark Ellison",
+      "email": "andres.gomez@example.com",
+      "employeeId": "EMP-1057",
+      "example": true,
+      "name": "Andrés Gómez",
+      "notes": "Prefers morning shift",
+      "startDate": "2023-08-01",
+      "supervisor": "Carlos Rivas",
+      "team": "Billing Support"
+    },
+    {
+      "id": "p03",
+      "companyTeamLead": "Diana Ortiz",
+      "computerTag": "PC-0250",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Mark Ellison",
+      "email": "sofia.herrera@example.com",
+      "employeeId": "EMP-1063",
+      "example": true,
+      "name": "Sofía Herrera",
+      "notes": "",
+      "startDate": "2024-01-22",
+      "supervisor": "Carlos Rivas",
+      "team": "Billing Support"
+    },
+    {
+      "id": "p04",
+      "companyTeamLead": "Diana Ortiz",
+      "computerTag": "PC-0262",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Mark Ellison",
+      "email": "daniel.castro@example.com",
+      "employeeId": "EMP-1071",
+      "example": true,
+      "name": "Daniel Castro",
+      "notes": "",
+      "startDate": "2024-05-06",
+      "supervisor": "Carlos Rivas",
+      "team": "Billing Support"
+    },
+    {
+      "id": "p05",
+      "companyTeamLead": "Jorge Salas",
+      "computerTag": "PC-0275",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Tom Becker",
+      "email": "valentina.rojas@example.com",
+      "employeeId": "EMP-1088",
+      "example": true,
+      "name": "Valentina Rojas",
+      "notes": "Second monitor requested",
+      "startDate": "2022-11-09",
+      "supervisor": "Paula Vega",
+      "team": "Tech Support"
+    },
+    {
+      "id": "p06",
+      "companyTeamLead": "Jorge Salas",
+      "computerTag": "PC-0281",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Tom Becker",
+      "email": "miguel.torres@example.com",
+      "employeeId": "EMP-1093",
+      "example": true,
+      "name": "Miguel Torres",
+      "notes": "",
+      "startDate": "2023-06-19",
+      "supervisor": "Paula Vega",
+      "team": "Tech Support"
+    },
+    {
+      "id": "p07",
+      "companyTeamLead": "Jorge Salas",
+      "computerTag": "PC-0290",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Tom Becker",
+      "email": "camila.navarro@example.com",
+      "employeeId": "EMP-1101",
+      "example": true,
+      "name": "Camila Navarro",
+      "notes": "",
+      "startDate": "2024-09-02",
+      "supervisor": "Paula Vega",
+      "team": "Tech Support"
+    },
+    {
+      "id": "p08",
+      "companyTeamLead": "Natalia Ruiz",
+      "computerTag": "PC-0302",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "",
+      "email": "julian.pardo@example.com",
+      "employeeId": "EMP-1110",
+      "example": true,
+      "name": "Julián Pardo",
+      "notes": "",
+      "startDate": "2021-04-12",
+      "supervisor": "Carlos Rivas",
+      "team": "Quality"
+    },
+    {
+      "id": "p09",
+      "companyTeamLead": "Natalia Ruiz",
+      "computerTag": "PC-0315",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Amy Ford",
+      "email": "isabella.ortega@example.com",
+      "employeeId": "EMP-1124",
+      "example": true,
+      "name": "Isabella Ortega",
+      "notes": "",
+      "startDate": "2025-02-17",
+      "supervisor": "Paula Vega",
+      "team": "Onboarding"
+    },
+    {
+      "id": "p10",
+      "companyTeamLead": "Natalia Ruiz",
+      "computerTag": "PC-0321",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Amy Ford",
+      "email": "sebastian.leon@example.com",
+      "employeeId": "EMP-1131",
+      "example": true,
+      "name": "Sebastián León",
+      "notes": "",
+      "startDate": "2025-02-17",
+      "supervisor": "Paula Vega",
+      "team": "Onboarding"
+    },
+    {
+      "id": "p11",
+      "companyTeamLead": "Natalia Ruiz",
+      "computerTag": "PC-0328",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Amy Ford",
+      "email": "mariana.silva@example.com",
+      "employeeId": "EMP-1139",
+      "example": true,
+      "name": "Mariana Silva",
+      "notes": "",
+      "startDate": "2025-06-30",
+      "supervisor": "Paula Vega",
+      "team": "Onboarding"
+    },
+    {
+      "id": "p12",
+      "companyTeamLead": "Jorge Salas",
+      "computerTag": "PC-0333",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "Tom Becker",
+      "email": "tomas.aguilar@example.com",
+      "employeeId": "EMP-1145",
+      "example": true,
+      "name": "Tomás Aguilar",
+      "notes": "",
+      "startDate": "2025-08-11",
+      "supervisor": "Paula Vega",
+      "team": "Tech Support"
+    },
+    {
+      "id": "p13",
+      "companyTeamLead": "Natalia Ruiz",
+      "computerTag": "PC-0340",
+      "customerSupervisor": "Rachel Kim",
+      "customerTeamLead": "",
+      "email": "lucia.romero@example.com",
+      "employeeId": "EMP-1152",
+      "example": true,
+      "name": "Lucía Romero",
+      "notes": "New hire, waiting for a desk",
+      "startDate": "2026-10-05",
+      "supervisor": "Carlos Rivas",
+      "team": "Quality"
+    }
+  ],
+  "zones": [
+    {
+      "id": "z_2a6310ba502646",
+      "h": 21,
+      "name": "New area",
+      "w": 21,
+      "x": 1,
+      "y": 1
+    }
+  ]
+}
