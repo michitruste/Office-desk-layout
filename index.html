@@ -3420,7 +3420,7 @@ function planSVG(names){
     `<text x="${PAD}" y="48" font-size="12" fill="#${MUTED_HEX}">${esc(new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }))} · ${ds.length} desks · ${seated} seated · ${ds.length - seated} free</text>`];
   // areas are pulled in from the grid lines with rounded corners, so two areas side by side show as two shapes
   const ZIN = .14, toPx = q => `${Math.round((ox + q[0] * S) * 10) / 10} ${Math.round((oy + q[1] * S) * 10) / 10}`;
-  for (const z of zs) out.push(`<path d="${insetRoundPath(zonePts(z), ZIN, .4, toPx)}" fill="#${tint(ACCENT_HEX, .06)}" stroke="#${tint(ACCENT_HEX, .45)}" stroke-width="1.5" stroke-dasharray="6 4"/>`);
+  for (const z of zs) out.push(`<path d="${insetRoundPath(zonePts(z), ZIN, .4, toPx)}" fill="#${ACCENT_HEX}" fill-opacity=".06" stroke="#${ACCENT_HEX}" stroke-opacity=".45" stroke-width="1.5" stroke-dasharray="6 4"/>`);
   const r2 = v => Math.round(v * 100) / 100;
   for (const d of ds) {
     const sh = SHAPES[d.shape] || SHAPES.h, rot = d.rot || 0, x = ox + d.x * S, y = oy + d.y * S;
