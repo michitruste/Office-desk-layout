@@ -1041,7 +1041,8 @@ function fieldsPanelHTML(){
         <select class="input" data-fk="kind" aria-label="Kind of field" ${f.k === 'name' ? 'disabled' : ''}>${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${kindOf(f) === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
         <label class="check"><input type="checkbox" data-fk="match" ${f.match ? 'checked' : ''}>Recognise people by this</label>
       </div>
-      <input class="input sm" data-fk="aliases" value="${esc((f.aliases || []).join(', '))}" placeholder="Other Excel column titles, separated by commas" aria-label="Other Excel column titles for ${esc(f.label)}">
+      <div class="f"><label class="l" for="fa-${i}">Excel column titles that fill this field</label>
+        <input class="input sm" id="fa-${i}" data-fk="aliases" value="${esc((f.aliases || []).join(', '))}" placeholder="e.g. Name, Employee name — separated by commas"></div>
     </div>`).join('')}
     <div><button type="button" class="btn small" data-act="fieldAdd">${ICON.plus}Add a field</button></div>
     <span class="sm muted">Removing a field hides it from cards, forms and exports.</span>
