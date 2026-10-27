@@ -37,6 +37,7 @@ These can't write to files directly. The map saves in the browser instead, and t
 - **Recognise people by this:** tick it on the fields that identify a person (by default Employee ID, Customer ID, email and name). On import, a match on any ticked field updates that person instead of adding a duplicate.
 - **When you import**, each Excel column has a dropdown showing where it goes. You can change it, skip a column, or add it as a new field. Your choices are remembered for next time.
 - **Where it's kept:** the field setup is saved inside `desk-map-data.json` with everything else.
+- **Colour by:** under the map, pick which field colours the desks. It lists the short text fields (Team, Supervisor, the team leads, your own) that at least one person has filled in. Each browser remembers its own choice, and the picture and Excel plan exports use it too. Click a name in that row to highlight those people's desks (and list them under People); click it again or press Esc to stop.
 
 ## Walls, doors, windows and pillars
 

@@ -203,6 +203,11 @@ body.placing, body.placing *{cursor:grabbing !important}
 
 .legend{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--line);background:var(--surface)}
 .legend:empty{display:none}
+.legend{align-items:center}
+.legend .cby{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-right:6px}
+.legend .cby select{font:inherit;font-size:13px;color:var(--ink);background:var(--sheet);border:1px solid var(--line);border-radius:7px;padding:3px 6px}
+.chipbtn.on{border-color:var(--tc, var(--accent));background:color-mix(in srgb, var(--tc, var(--accent)) 16%, transparent);box-shadow:inset 0 0 0 1px var(--tc, var(--accent));font-weight:600}
+.chipbtn.dim{opacity:.5}
 .chipbtn{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);border-radius:99px;background:transparent;font-size:13px;cursor:pointer}
 .chipbtn:hover{border-color:var(--line-strong)}
 .chipbtn .n{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
@@ -495,6 +500,7 @@ const AREA_ALIASES = {
 const state = {
   desks: new Map(), people: new Map(), zones: new Map(), fixtures: new Map(), settings: new Map(), fieldsDraft: null,
   loaded: false, local: false, readOnly: false,
+  colorBy: (() => { try { return localStorage.getItem('office-desk-map:colorBy'); } catch { return null; } })() || 'team', groupFilter: null,
   sel: new Set(), selRoom: new Set(), selectedZone: null, selectedFixture: null, selectedPerson: null,
   tab: 'desk', arrange: false, multi: false, tool: null, query: '', peopleFilter: 'all', noDeskOpen: false,
   zoom: window.innerWidth < 880 ? 0.6 : 1,
@@ -534,11 +540,36 @@ function teams(){
   for (const p of state.people.values()) { const t = (p.team||'').trim(); if (t) m.set(t, (m.get(t)||0)+1); }
   return [...m.entries()].sort((a,b) => a[0].localeCompare(b[0]));
 }
+// Desks are coloured by one short text field of the person: Team, unless another is picked under "Colour by".
+// Each value of that field gets one of the 8 colours, in alphabetical order.
+// only the short text fields somebody has actually filled in
+const colorFields = () => { const ps = [...state.people.values()]; return fields().filter(f => f.list && ps.some(p => String(p[f.k] ?? '').trim())); };
+// the picked field, else Team, else the first one with data; worked out once per render (see rebuildTeamColors)
+let colorKeyCache = null;
+function pickColorKey(){ const cf = colorFields(); return (cf.find(f => f.k === state.colorBy) || cf.find(f => f.k === 'team') || cf[0])?.k || null; }
+const colorKey = () => colorKeyCache;
+const fieldLabel = k => fields().find(f => f.k === k)?.label || k;
+function groupOf(p){ const k = colorKey(); return k && p ? String(p[k] ?? '').trim() : ''; }
+function groups(){
+  const k = colorKey(), m = new Map();
+  if (k) for (const p of state.people.values()) { const v = String(p[k] ?? '').trim(); if (v) m.set(v, (m.get(v) || 0) + 1); }
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
 let teamColorCache = new Map();
-function rebuildTeamColors(){ teamColorCache = new Map(teams().map(([t], i) => [t.toLowerCase(), i % 8])); }
-function teamVar(team){
-  const i = teamColorCache.get((team||'').trim().toLowerCase());
+function rebuildTeamColors(){ colorKeyCache = pickColorKey(); teamColorCache = new Map(groups().map(([t], i) => [t.toLowerCase(), i % 8])); }
+function groupVar(v){
+  const i = teamColorCache.get(String(v ?? '').trim().toLowerCase());
   return i === undefined ? 'var(--line-strong)' : `var(--t${i})`;
+}
+const personVar = p => groupVar(groupOf(p));
+// a team's own colour only means something while desks are coloured by team
+const teamVar = team => colorKey() === 'team' ? groupVar(team) : 'var(--line-strong)';
+// the highlight picked in the legend (or a team in the overview): { k: field, v: value }
+const inGroup = (p, g) => !!p && String(p[g.k] ?? '').trim().toLowerCase() === g.v.toLowerCase();
+function setGroupFilter(k, v){
+  const g = state.groupFilter;
+  state.groupFilter = !k || (g && g.k === k && g.v.toLowerCase() === String(v).toLowerCase()) ? null : { k, v: String(v) };
+  render(true);
 }
 function initials(name){
   const parts = String(name||'?').trim().split(/\s+/).filter(Boolean);
@@ -1143,7 +1174,7 @@ function deskHTML(d, hits, clash){
   const isSel = state.sel.has(d.id);
   const issues = clash && clash.get(d.id);
   const cls = ['desk', p ? '' : 'free', isSel ? 'selected' : '', isSel && state.sel.size === 1 ? 'single' : '', hits && hits.has(d.id) ? 'hit' : '', issues ? 'conflict' : ''].filter(Boolean).join(' ');
-  const tc = p ? teamVar(p.team) : 'var(--line-strong)';
+  const tc = p ? personVar(p) : 'var(--line-strong)';
   const label = `Desk ${d.number}${p ? ', ' + p.name : ', free'}${issues ? `. It ${joinAnd(issues.map(k => REASON[k]))}` : ''}`;
   return `<div class="${cls}" data-id="${esc(d.id)}" role="button" tabindex="0" aria-label="${esc(label)}" title="${esc(label)}" aria-pressed="${isSel}"
     style="--x:${d.x};--y:${d.y};--w:${s.w};--h:${s.h};--tc:${tc}">
@@ -1262,14 +1293,15 @@ function renderPlan(){
   }
   const q = state.query.trim().toLowerCase();
   let hits = null;
-  if (q) {
+  const gf = state.groupFilter;
+  if (q || gf) {
     hits = new Set();
     for (const d of ds) {
       const p = d.personId ? state.people.get(d.personId) : null;
-      if (String(d.number).toLowerCase().includes(q) || (p && personMatches(p, q))) hits.add(d.id);
+      if ((!q || String(d.number).toLowerCase().includes(q) || (p && personMatches(p, q))) && (!gf || inGroup(p, gf))) hits.add(d.id);
     }
   }
-  planEl.classList.toggle('searching', !!q);
+  planEl.classList.toggle('searching', !!(q || gf));
   const zs = [...state.zones.values()], clash = fixtureConflicts(ds);
   planEl.innerHTML = zonesFillHTML(zs, cols, rows)
     + ds.sort((a,b) => (a.y - b.y) || (a.x - b.x)).map(d => deskHTML(d, hits, clash)).join('')
@@ -1277,8 +1309,16 @@ function renderPlan(){
     + zonesTopHTML(zs, cols, rows);
 }
 
+// under the map: what the desks are coloured by, and one chip per value; a chip highlights its people's desks
 function renderLegend(){
-  $('#legend').innerHTML = teams().map(([t, n]) => `<button class="chipbtn" data-act="filterTeam" data-team="${esc(t)}" style="--tc:${teamVar(t)}"><span class="dot"></span>${esc(t)}<span class="n">${n}</span></button>`).join('');
+  const el = $('#legend');
+  if (!state.people.size) { el.innerHTML = ''; return; }
+  const k = colorKey(), gs = groups(), cf = colorFields(), gf = state.groupFilter;
+  const on = v => !!gf && gf.k === k && gf.v.toLowerCase() === v.toLowerCase();
+  el.innerHTML = (cf.length > 1 ? `<label class="cby"><span>Colour by</span><select id="colorBy" aria-label="Colour desks by">${cf.map(f => `<option value="${esc(f.k)}" ${f.k === k ? 'selected' : ''}>${esc(f.label)}</option>`).join('')}</select></label>` : '')
+    + (gf && gf.k !== k ? `<button class="chipbtn on" data-act="clearGroup" title="Stop highlighting">${esc(fieldLabel(gf.k))}: ${esc(gf.v)} <span aria-hidden="true">✕</span></button>` : '')
+    + gs.map(([v, n]) => `<button class="chipbtn${on(v) ? ' on' : gf && gf.k === k ? ' dim' : ''}" data-act="filterGroup" data-k="${esc(k)}" data-v="${esc(v)}" aria-pressed="${on(v)}" title="${on(v) ? 'Stop highlighting' : 'Highlight their desks'}" style="--tc:${groupVar(v)}"><span class="dot"></span>${esc(v)}<span class="n">${n}</span></button>`).join('')
+    + (k && !gs.length ? `<span class="sm muted">Nobody has a ${esc(fieldLabel(k).toLowerCase())} filled in yet.</span>` : '');
 }
 
 /* ---------- panel ---------- */
@@ -1317,9 +1357,9 @@ function factRows(p){
   }).join('');
 }
 function personCardHTML(p){
-  return `<div class="card" style="--tc:${teamVar(p.team)}">
+  return `<div class="card" style="--tc:${personVar(p)}">
     <div class="card-top"><div class="avatar">${esc(initials(p.name))}</div>
-      <div class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${p.team ? `<span class="dot"></span>${esc(p.team)}` : 'No team'}</div></div>
+      <div class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${p.team ? `<span class="dot" style="--tc:${teamVar(p.team)}"></span>${esc(p.team)}` : 'No team'}</div></div>
       ${state.readOnly ? '' : `<button class="btn small" data-act="editPerson" data-id="${esc(p.id)}">Edit</button>`}
     </div>
     <dl class="facts">${factRows(p)}</dl>
@@ -1505,7 +1545,7 @@ function overviewHTML(){
     html += `<div class="stack"><span class="eyebrow">Areas</span><div class="teamlist">${[...state.zones.values()].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(z => `<button class="chipbtn" data-act="openZone" data-id="${esc(z.id)}"><span class="dot" style="--tc:var(--accent)"></span>${esc(z.name || 'Area')}</button>`).join('')}</div></div>`;
   }
   if (ts.length) {
-    html += `<div class="stack"><span class="eyebrow">Teams</span><div class="teamlist">${ts.map(([t, n]) => `<button class="chipbtn" data-act="filterTeam" data-team="${esc(t)}" style="--tc:${teamVar(t)}"><span class="dot"></span>${esc(t)}<span class="n">${n} ${n === 1 ? 'person' : 'people'}</span></button>`).join('')}</div></div>`;
+    html += `<div class="stack"><span class="eyebrow">Teams</span><div class="teamlist">${ts.map(([t, n]) => `<button class="chipbtn${state.groupFilter?.k === 'team' && state.groupFilter.v.toLowerCase() === t.toLowerCase() ? ' on' : ''}" data-act="filterTeam" data-team="${esc(t)}" style="--tc:${teamVar(t)}"><span class="dot"></span>${esc(t)}<span class="n">${n} ${n === 1 ? 'person' : 'people'}</span></button>`).join('')}</div></div>`;
   }
   return html;
 }
@@ -1513,7 +1553,7 @@ function overviewHTML(){
 function personRowHTML(p){
   const at = seatIndex().get(p.id);
   const grip = !state.readOnly && state.desks.size;
-  return `<li><button class="prow" data-act="openPerson" data-id="${esc(p.id)}" style="--tc:${teamVar(p.team)}" ${grip ? 'title="Drag onto a desk on the map to seat"' : ''}>
+  return `<li><button class="prow" data-act="openPerson" data-id="${esc(p.id)}" style="--tc:${personVar(p)}" ${grip ? 'title="Drag onto a desk on the map to seat"' : ''}>
     ${grip ? `<span class="grip" aria-hidden="true">${ICON.grip}</span>` : ''}
     <span class="avatar">${esc(initials(p.name))}</span>
     <span class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${esc([p.team, p.employeeId].filter(Boolean).join(' · ') || 'No team')}</div></span>
@@ -1566,7 +1606,8 @@ function peoplePanelHTML(){
   }
   const q = state.query.trim().toLowerCase();
   const si = seatIndex();
-  const found = peopleArr().filter(p => !q || personMatches(p, q));
+  const gf = state.groupFilter;
+  const found = peopleArr().filter(p => (!q || personMatches(p, q)) && (!gf || inGroup(p, gf)));
   // WFH people don't count as missing a desk
   const group = p => si.has(p.id) ? 'seated' : p.wfh ? 'wfh' : 'unseated';
   const pf = state.peopleFilter;
@@ -1575,6 +1616,7 @@ function peoplePanelHTML(){
   let html = state.readOnly ? '' : `<div class="row2"><button class="btn primary" data-act="newPerson">${ICON.plus}Add person</button><button class="btn" data-act="openImport">Import list</button><button class="btn" data-act="openFields">Fields</button></div>`;
   if (!state.people.size) return html + `<div class="empty-note">No people yet. Add them one by one, or import a spreadsheet with columns like Name, Employee ID, Email, Team and Desk.</div>`;
   const segs = [['all', 'All', found.length], ['seated', 'With desk', count('seated')], ['unseated', 'No desk', count('unseated')], ['wfh', 'WFH', count('wfh')]];
+  if (gf) html += `<div class="row2"><button class="chipbtn on" data-act="clearGroup" title="Show everyone">${esc(fieldLabel(gf.k))}: ${esc(gf.v)} <span aria-hidden="true">✕</span></button></div>`;
   html += `<div class="seg" role="group" aria-label="Show people">${segs.map(([k, l, n]) => `<button data-act="peopleFilter" data-f="${k}" aria-pressed="${pf === k}">${l}<span class="n">${n}</span></button>`).join('')}</div>`;
   if (!list.length) {
     const what = { seated: 'has a desk', unseated: 'is waiting for a desk', wfh: 'works from home' }[pf];
@@ -2215,7 +2257,9 @@ document.addEventListener('click', e => {
       break;
     }
     case 'forgetWaiting': clearWaiting(b.dataset.id); render(true); toast('No longer waiting for that desk'); break;
-    case 'filterTeam': setQuery(b.dataset.team); break;
+    case 'filterTeam': setGroupFilter('team', b.dataset.team); break;
+    case 'filterGroup': setGroupFilter(b.dataset.k, b.dataset.v); break;
+    case 'clearGroup': setGroupFilter(null); break;
     case 'copy': copyText(b.dataset.val, b); break;
     case 'openImport': openImport(); break;
     case 'openData': openData(); break;
@@ -2723,9 +2767,16 @@ document.addEventListener('keydown', e => {
     if (adraft) { adraft = null; drawDraft(); toast('Area cancelled. Draw another, or press Esc again to stop.'); return; }
     setTool(null); return;
   }
+  if (!anySel() && state.groupFilter) { setGroupFilter(null); return; }
   if (anySel()) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.confirm = null; render(true); }
 });
 planEl.addEventListener('pointermove', e => { pointerCell = cellFromEvent(e); });
+$('#legend').addEventListener('change', e => {
+  if (e.target.id !== 'colorBy') return;
+  state.colorBy = e.target.value;
+  try { localStorage.setItem('office-desk-map:colorBy', state.colorBy); } catch {}
+  render(true);
+});
 // while drawing an area corner by corner, the next side follows the pointer
 planEl.addEventListener('pointermove', e => {
   if (!adraft || drag) return;
@@ -2823,7 +2874,7 @@ document.addEventListener('pointermove', e => {
     const person = state.people.get(p.id); if (!person) { pdrag = null; return; }
     p.moved = true;
     p.ghost = document.createElement('div'); p.ghost.className = 'pghost';
-    p.ghost.style.setProperty('--tc', teamVar(person.team));
+    p.ghost.style.setProperty('--tc', personVar(person));
     p.ghost.innerHTML = `<span class="avatar">${esc(initials(person.name))}</span><span style="min-width:0"><span class="nm">${esc(person.name)}</span><span class="to">Drop on a desk</span></span>`;
     document.body.appendChild(p.ghost); document.body.classList.add('placing');
     p.row.classList.add('lifted');
@@ -3314,7 +3365,7 @@ function openExport(){
   dlg.innerHTML = `<h2 id="impTitle" tabindex="-1">Export</h2>
     <label class="check" for="expNames"><input type="checkbox" id="expNames" ${expOpts.names ? 'checked' : ''}>Show people's names on the plan</label>
     <div class="impsec"><h3>Picture (.png)</h3>
-      <p class="sm muted">The floor plan as an image, coloured by team, with a legend. Opens in Paint, Word, PowerPoint, email or chat.</p>
+      <p class="sm muted">The floor plan as an image, coloured like the map (by ${esc(fieldLabel(colorKey()).toLowerCase())}), with a legend. Opens in Paint, Word, PowerPoint, email or chat.</p>
       <label class="check" for="expLarge"><input type="checkbox" id="expLarge" ${expOpts.large ? 'checked' : ''}>Extra large, for printing big or zooming in</label>
       <div><button class="btn primary" data-exp="png">Download picture</button></div></div>
     <div class="impsec"><h3>Print or PDF</h3>
@@ -3322,7 +3373,7 @@ function openExport(){
       <label class="check" for="expList"><input type="checkbox" id="expList" ${expOpts.list ? 'checked' : ''}>Add a page listing who sits at each desk</label>
       <div><button class="btn primary" data-exp="print">Print or save as PDF</button></div></div>
     <div class="impsec"><h3>Excel floor plan (.xlsx)</h3>
-      <p class="sm muted">The plan drawn with Excel cells: each desk is a block of cells with its number and person, coloured by team, set up to print on one page. A second sheet lists every desk. Works offline.</p>
+      <p class="sm muted">The plan drawn with Excel cells: each desk is a block of cells with its number and person, coloured like the map, set up to print on one page. A second sheet lists every desk. Works offline.</p>
       <div><button class="btn primary" data-exp="xlsxPlan">Download Excel floor plan</button></div></div>
     <div class="impsec"><h3>Excel data (.xlsx)</h3>
       <p class="sm muted">People, desks, areas and the room (walls, doors, windows, pillars) on separate sheets. You can edit it and import it again, so it also works as a backup.</p>
@@ -3401,7 +3452,7 @@ function planSVG(names){
   const FONT = "Barlow, 'Segoe UI', Arial, sans-serif", MONO = "'JetBrains Mono', Consolas, monospace";
   const est = (str, size) => String(str).length * size * 0.56; // rough text width
   const { minX, minY, maxX, maxY } = extent();
-  const ds = desksArr().sort(byNumber), zs = [...state.zones.values()], ts = teams();
+  const ds = desksArr().sort(byNumber), zs = [...state.zones.values()], ts = groups();
   const planW = (maxX - minX + 2) * S, planH = (maxY - minY + 2) * S;
   const W = Math.max(planW + 2 * PAD, 440);
   const ox = (W - planW) / 2 - (minX - 1) * S, oy = HEAD - (minY - 1) * S;
@@ -3424,7 +3475,7 @@ function planSVG(names){
   const r2 = v => Math.round(v * 100) / 100;
   for (const d of ds) {
     const sh = SHAPES[d.shape] || SHAPES.h, rot = d.rot || 0, x = ox + d.x * S, y = oy + d.y * S;
-    const p = d.personId ? state.people.get(d.personId) : null, hex = p ? teamHex(p.team) : FREE_HEX;
+    const p = d.personId ? state.people.get(d.personId) : null, hex = p ? teamHex(groupOf(p)) : FREE_HEX;
     const look = p ? `fill="#${tint(hex, .2)}" stroke="#${hex}"` : `fill="#ffffff" stroke="#${FREE_HEX}" stroke-dasharray="4 3"`;
     out.push(d.shape === 'corner'
       ? `<path d="M${r2(.05 * S)} ${r2(.05 * S)}H${r2(3.95 * S)}V${r2(1.95 * S)}H${r2(1.95 * S)}V${r2(3.95 * S)}H${r2(.05 * S)}Z" transform="translate(${x} ${y}) rotate(${rot} ${2 * S} ${2 * S})" ${look} stroke-width="1.5" stroke-linejoin="round"/>`
@@ -3583,7 +3634,7 @@ function buildPlanXlsx(names){
     if (!cells.has(R(y) + ',' + C(x)) && R(y) >= 2 && C(x) >= 0) put(R(y), C(x), { s: st.style({ border: wb(x, y) }) });
   }
   for (const d of ds) {
-    const rot = d.rot || 0, p = d.personId ? state.people.get(d.personId) : null, hex = p ? teamHex(p.team) : FREE_HEX;
+    const rot = d.rot || 0, p = d.personId ? state.people.get(d.personId) : null, hex = p ? teamHex(groupOf(p)) : FREE_HEX;
     const fill = p ? tint(hex, .25) : 'FFFFFF', line = p ? ['thin', hex] : ['dashed', FREE_HEX];
     const own = new Set(cellsOf(d.shape, rot, d.x, d.y));
     // where the number goes: the whole desk, or a corner desk's long side; its short leg is merged separately
@@ -3603,9 +3654,9 @@ function buildPlanXlsx(names){
     merge(lab.x, lab.y, lab.w, lab.h);
     if (d.shape === 'corner') merge(d.x + (rot === 90 || rot === 180 ? 2 : 0), d.y + (low ? 0 : 2), 2, 2);
   }
-  // legend under the plan: a swatch and the team name, several to a row
+  // legend under the plan: a swatch and the value of the colouring field (team by default), several to a row
   const planCols = maxX - minX + 2, perRow = Math.max(1, Math.floor(planCols / 10));
-  const ts = [...teams(), [null, 0]], top = R(maxY) + 2;
+  const ts = [...groups(), [null, 0]], top = R(maxY) + 2;
   ts.forEach(([t, n], i) => {
     const r = top + Math.floor(i / perRow), c = 1 + (i % perRow) * 10, hex = t ? teamHex(t) : FREE_HEX, line = t ? ['thin', hex] : ['dashed', FREE_HEX];
     put(r, c, { s: st.style({ fill: t ? tint(hex, .25) : 'FFFFFF', border: { l: line, r: line, t: line, b: line } }) });
