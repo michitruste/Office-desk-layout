@@ -94,7 +94,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .tools .spacer{flex:1}
 .zoom{display:flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 .zoom button{border:0;background:transparent;min-width:32px;height:32px;cursor:pointer;font-size:18px;font-weight:600;border-radius:7px;padding:0 6px}
-.zoom button.fit{font-size:13px;border-left:1px solid var(--line);border-radius:0 7px 7px 0;padding:0 10px}
+.zoom button.fit{font-size:13px;border-left:1px solid var(--line);border-radius:0;padding:0 10px}
+.zoom button.fit:last-child{border-radius:0 7px 7px 0}
+.zoom button.fit svg{width:16px;height:16px;display:block}
 .zoom button:hover{background:var(--accent-soft)}
 .zoom span{font-family:var(--f-mono);font-size:12px;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
 
@@ -781,12 +783,14 @@ const ICON = {
   mirrorH: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18" stroke-dasharray="2 3"/><path d="M9 6 3 18h6zM15 6l6 12h-6z"/></svg>',
   mirrorV: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18" stroke-dasharray="2 3"/><path d="M6 9 18 3v6zM6 15l12 6v-6z"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  fitW: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M21 5v14M7 12h10M10 9l-3 3 3 3M14 9l3 3-3 3"/></svg>',
+  fitH: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14M5 21h14M12 7v10M9 10l3-3 3 3M9 14l3 3 3-3"/></svg>',
   grip: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>'
 };
 
 function renderTools(){
   const ur = state.readOnly ? '' : `<button class="btn small ghost" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${undoLog.undo.length || undoLog.step ? '' : 'disabled'}>${ICON.undo}</button><button class="btn small ghost" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo" ${undoLog.redo.length ? '' : 'disabled'}>${ICON.redo}</button>`;
-  const z = `<div class="spacer"></div>${ur}<div class="zoom" role="group" aria-label="Zoom"><button data-act="zoomOut" aria-label="Zoom out">−</button><span>${Math.round(state.zoom*100)}%</span><button data-act="zoomIn" aria-label="Zoom in">+</button><button class="fit" data-act="fit">Fit</button></div>`;
+  const z = `<div class="spacer"></div>${ur}<div class="zoom" role="group" aria-label="Zoom"><button data-act="zoomOut" aria-label="Zoom out">−</button><span>${Math.round(state.zoom*100)}%</span><button data-act="zoomIn" aria-label="Zoom in">+</button><button class="fit" data-act="fit" title="Fit the whole map (Ctrl+0 over the map)">Fit</button><button class="fit" data-act="fitW" title="Fit the width" aria-label="Fit the width">${ICON.fitW}</button><button class="fit" data-act="fitH" title="Fit the height" aria-label="Fit the height">${ICON.fitH}</button></div>`;
   let html;
   if (state.arrange) {
     html = `<span class="lab">Add</span>
@@ -1552,14 +1556,19 @@ function setZoom(z, at){
   // on phones the page scrolls instead of the map
   if (!narrow()) sc.scrollTop += dy; else if (at) window.scrollBy(0, dy);
 }
-function fitToScreen(){
+// axis: 'w' fits the width, 'h' the height, nothing fits both
+function fitToScreen(axis){
   const sc = $('#scroll');
   const { maxX } = extent();
   if (!maxX) { setZoom(1); return; }
   const { cols, rows } = sheetSize(false);
   // the sheet plus its half-square margin on each side; on phones the map grows down the page, so only its width needs to fit
-  const zW = (sc.clientWidth - 8) / ((cols + 1) * U_BASE);
-  const z = narrow() ? zW : Math.min(zW, (sc.clientHeight - 8) / ((rows + 1) * U_BASE));
+  const W = (cols + 1) * U_BASE, H = (rows + 1) * U_BASE, BAR = 18;
+  let zW = (sc.clientWidth - 8) / W, zH = ((narrow() ? window.innerHeight : sc.clientHeight) - 8) / H;
+  // fitting one way can overflow the other, and that scrollbar takes room from the side just fitted
+  if (axis === 'w' && !narrow() && H * zW > sc.clientHeight) zW = (sc.offsetWidth - BAR - 8) / W;
+  if (axis === 'h' && W * zH > sc.clientWidth) zH = ((narrow() ? window.innerHeight : sc.offsetHeight) - BAR - 8) / H;
+  const z = axis === 'w' ? zW : axis === 'h' ? zH : narrow() ? zW : Math.min(zW, zH);
   state.zoom = clamp(Math.floor(z * 100) / 100, 0.2, 1.5);
   renderTools(); renderPlan();
   sc.scrollTo({ left: 0, top: 0 });
@@ -1603,6 +1612,8 @@ document.addEventListener('click', e => {
     case 'zoomIn': setZoom(ZOOMS.find(z => z > state.zoom + 0.001) ?? ZOOMS[ZOOMS.length - 1]); break;
     case 'zoomOut': setZoom([...ZOOMS].reverse().find(z => z < state.zoom - 0.001) ?? ZOOMS[0]); break;
     case 'fit': fitToScreen(); break;
+    case 'fitW': fitToScreen('w'); break;
+    case 'fitH': fitToScreen('h'); break;
     case 'addDesk': addDesk(b.dataset.shape); break;
     case 'addRow': if (!state.arrange) setArrange(true); state.panelMode = 'addRow'; state.editing = null; state.tab = 'desk'; renderPanel(true); requestAnimationFrame(() => { $('#rowCount')?.focus(); if (window.innerWidth < 880) $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }); }); break;
     case 'cancelRow': state.panelMode = null; renderPanel(true); break;
