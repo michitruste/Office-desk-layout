@@ -180,6 +180,8 @@ body.placing, body.placing *{cursor:grabbing !important}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
 .tabs .n{font-family:var(--f-mono);font-size:12px;font-weight:500;margin-left:4px}
 .pbody{flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+/* sections keep their full height and the panel scrolls; otherwise cards (overflow hidden) get squashed and clipped */
+.pbody > *{flex-shrink:0}
 .eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .dhead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
 .dnum{font-family:var(--f-display);font-weight:700;font-size:40px;line-height:.9;letter-spacing:.01em;overflow-wrap:anywhere}
