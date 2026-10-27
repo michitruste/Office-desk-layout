@@ -2554,30 +2554,46 @@ async function exportXlsx(){
 
 /* ---------- export dialog ---------- */
 let cadOpts = { squareCm: 40, names: true };
+let expOpts = { names: true, large: false, list: true };
 function openExport(){
   imp = null;
   const dlg = $('#importDialog');
   dlg.innerHTML = `<h2 id="impTitle" tabindex="-1">Export</h2>
-    <div class="impsec"><h3>Excel workbook (.xlsx)</h3>
+    <label class="check" for="expNames"><input type="checkbox" id="expNames" ${expOpts.names ? 'checked' : ''}>Show people's names on the plan</label>
+    <div class="impsec"><h3>Picture (.png)</h3>
+      <p class="sm muted">The floor plan as an image, coloured by team, with a legend. Opens in Paint, Word, PowerPoint, email or chat.</p>
+      <label class="check" for="expLarge"><input type="checkbox" id="expLarge" ${expOpts.large ? 'checked' : ''}>Extra large, for printing big or zooming in</label>
+      <div><button class="btn primary" data-exp="png">Download picture</button></div></div>
+    <div class="impsec"><h3>Print or PDF</h3>
+      <p class="sm muted">Opens the print window with the plan on one page. For a PDF, choose “Save as PDF” as the printer.</p>
+      <label class="check" for="expList"><input type="checkbox" id="expList" ${expOpts.list ? 'checked' : ''}>Add a page listing who sits at each desk</label>
+      <div><button class="btn primary" data-exp="print">Print or save as PDF</button></div></div>
+    <div class="impsec"><h3>Excel floor plan (.xlsx)</h3>
+      <p class="sm muted">The plan drawn with Excel cells: each desk is a block of cells with its number and person, coloured by team, set up to print on one page. A second sheet lists every desk. Works offline.</p>
+      <div><button class="btn primary" data-exp="xlsxPlan">Download Excel floor plan</button></div></div>
+    <div class="impsec"><h3>Excel data (.xlsx)</h3>
       <p class="sm muted">People, desks and areas on separate sheets. You can edit it and import it again, so it also works as a backup.</p>
-      <div><button class="btn primary" data-exp="xlsx">Download Excel workbook</button></div></div>
+      <div><button class="btn" data-exp="xlsx">Download Excel data</button></div></div>
     <div class="impsec"><h3>CAD drawing (.dxf)</h3>
       <p class="sm muted">Opens in AutoCAD, LibreCAD, DraftSight, BricsCAD and most other CAD programs. Desk outlines, desk numbers, names and areas each go on their own layer, drawn to scale in millimetres. In AutoCAD you can then use Save As to get a .dwg.</p>
       <div class="grid2">
         <div class="stack"><label class="l" for="cadSq">Size of one grid square (cm)</label><input class="input mono" id="cadSq" type="number" min="5" max="200" step="1" value="${cadOpts.squareCm}"></div>
         <div class="stack" style="justify-content:flex-end"><span class="sm muted" id="cadHint"></span></div>
       </div>
-      <label class="check" for="cadNames"><input type="checkbox" id="cadNames" ${cadOpts.names ? 'checked' : ''}>Include people's names</label>
       <p class="sm muted">Units are millimetres. Layers: DESKS, DESK-NUMBERS, NAMES, AREAS, AREA-NAMES.</p>
-      <div><button class="btn primary" data-exp="dxf">Download CAD drawing</button></div></div>
+      <div><button class="btn" data-exp="dxf">Download CAD drawing</button></div></div>
     <div class="row2"><span style="flex:1"></span><button class="btn" data-exp="close">Close</button></div>`;
   updateCadHint();
   $('#importOverlay').hidden = false;
   requestAnimationFrame(() => $('#impTitle')?.focus());
 }
+function readExpOpts(){
+  expOpts = { names: !!$('#expNames')?.checked, large: !!$('#expLarge')?.checked, list: !!$('#expList')?.checked };
+  return expOpts;
+}
 function readCadOpts(){
   const n = parseFloat($('#cadSq')?.value);
-  cadOpts = { squareCm: isNaN(n) ? 40 : clamp(n, 5, 200), names: !!$('#cadNames')?.checked };
+  cadOpts = { squareCm: isNaN(n) ? 40 : clamp(n, 5, 200), names: !!$('#expNames')?.checked };
   return cadOpts;
 }
 function updateCadHint(){
@@ -2593,6 +2609,10 @@ $('#importDialog').addEventListener('click', async e => {
   if (a === 'close') closeImport();
   else if (a === 'xlsx') exportXlsx();
   else if (a === 'dxf') exportDxf();
+  else if (!state.desks.size) toast('Add some desks to the map first');
+  else if (a === 'png') exportPng(readExpOpts()).catch(() => toast('The picture could not be made.'));
+  else if (a === 'print') printPlan(readExpOpts());
+  else if (a === 'xlsxPlan') { try { await saveFile('office-desk-map-plan.xlsx', buildPlanXlsx(readExpOpts().names)); } catch { toast('The Excel floor plan could not be made.'); } }
 });
 async function exportDxf(){
   const o = readCadOpts();
@@ -2610,6 +2630,227 @@ async function exportDxf(){
     void readme;
     await saveFile('office-desk-map.dxf', new Blob([dxf], { type: 'application/dxf' }));
   } catch { toast('The CAD drawing could not be prepared.'); }
+}
+
+/* ---------- the plan as a picture (SVG), shared by the PNG and print/PDF exports ---------- */
+// exports are always drawn in the light theme, on white
+const TEAM_HEX = ['c4561c', '2c7a4e', '7a49b3', '0e7b8a', 'b52f6b', '8c6a0f', '3a5fc6', '5f7322']; // light --t0…--t7
+const ACCENT_HEX = '2453a6', FREE_HEX = '9aa8ad', INK_HEX = '1a2529', MUTED_HEX = '5b6a6f';
+function teamHex(team){ const i = teamColorCache.get((team || '').trim().toLowerCase()); return i === undefined ? FREE_HEX : TEAM_HEX[i]; }
+// the colour mixed with white; amount is how much of the colour is kept
+function tint(hex, amount){
+  const n = parseInt(hex, 16);
+  return [16, 8, 0].map(sh => Math.round(((n >> sh) & 255) * amount + 255 * (1 - amount)).toString(16).padStart(2, '0')).join('');
+}
+function zoneOf(d){ return [...state.zones.values()].find(z => d.x >= z.x && d.y >= z.y && d.x < z.x + z.w && d.y < z.y + z.h); }
+function planSVG(names){
+  const S = 24, PAD = 16, HEAD = 60;
+  const FONT = "Barlow, 'Segoe UI', Arial, sans-serif", MONO = "'JetBrains Mono', Consolas, monospace";
+  const est = (str, size) => String(str).length * size * 0.56; // rough text width
+  const { minX, minY, maxX, maxY } = extent();
+  const ds = desksArr().sort(byNumber), zs = [...state.zones.values()], ts = teams();
+  const planW = (maxX - minX + 2) * S, planH = (maxY - minY + 2) * S;
+  const W = Math.max(planW + 2 * PAD, 440);
+  const ox = (W - planW) / 2 - (minX - 1) * S, oy = HEAD - (minY - 1) * S;
+  // legend items flow left to right and wrap
+  const legend = []; let lx = PAD, ly = HEAD + planH + 14;
+  for (const [t, n] of [...ts, [null, 0]]) {
+    const label = t ? `${t} · ${n}` : 'Free desk', w = 18 + est(label, 12) + 20;
+    if (lx + w > W - PAD && lx > PAD) { lx = PAD; ly += 22; }
+    legend.push({ t, label, x: lx, y: ly }); lx += w;
+  }
+  const H = ly + 22 + PAD;
+  const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}">`,
+    `<rect width="${W}" height="${H}" fill="#ffffff"/>`,
+    `<text x="${PAD}" y="30" font-size="20" font-weight="700" fill="#${INK_HEX}">Office Desk Map</text>`,
+    `<text x="${PAD}" y="48" font-size="12" fill="#${MUTED_HEX}">${esc(new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }))} · ${ds.length} desks · ${seated} seated · ${ds.length - seated} free</text>`];
+  for (const z of zs) out.push(`<rect x="${ox + z.x * S}" y="${oy + z.y * S}" width="${z.w * S}" height="${z.h * S}" rx="6" fill="#${tint(ACCENT_HEX, .06)}" stroke="#${tint(ACCENT_HEX, .45)}" stroke-width="1.5" stroke-dasharray="6 4"/>`);
+  const r2 = v => Math.round(v * 100) / 100;
+  for (const d of ds) {
+    const sh = SHAPES[d.shape] || SHAPES.h, rot = d.rot || 0, x = ox + d.x * S, y = oy + d.y * S;
+    const p = d.personId ? state.people.get(d.personId) : null, hex = p ? teamHex(p.team) : FREE_HEX;
+    const look = p ? `fill="#${tint(hex, .2)}" stroke="#${hex}"` : `fill="#ffffff" stroke="#${FREE_HEX}" stroke-dasharray="4 3"`;
+    out.push(d.shape === 'corner'
+      ? `<path d="M${r2(.05 * S)} ${r2(.05 * S)}H${r2(3.95 * S)}V${r2(1.95 * S)}H${r2(1.95 * S)}V${r2(3.95 * S)}H${r2(.05 * S)}Z" transform="translate(${x} ${y}) rotate(${rot} ${2 * S} ${2 * S})" ${look} stroke-width="1.5" stroke-linejoin="round"/>`
+      : `<rect x="${r2(x + .05 * S)}" y="${r2(y + .05 * S)}" width="${r2((sh.w - .1) * S)}" height="${r2((sh.h - .1) * S)}" rx="${r2(.2 * S)}" ${look} stroke-width="1.5"/>`);
+    // label in the middle of the desk (of a corner desk's long side); vertical desks read bottom to top, as on the map
+    const cx = x + sh.w * S / 2, cy = y + (d.shape === 'corner' ? (rot === 180 || rot === 270 ? 3 : 1) : sh.h / 2) * S;
+    const room = 3.6 * S, fit = (str, size) => est(str, size) > room ? ` textLength="${room}" lengthAdjust="spacingAndGlyphs"` : '';
+    const name = names && p ? shortName(p.name) : '';
+    const txt = (str, dy, size, font, color) => `<text x="${cx}" y="${r2(cy + dy)}" font-family="${font}" font-size="${r2(size)}" font-weight="600" fill="#${color}" text-anchor="middle" dominant-baseline="central"${fit(str, size)}>${esc(str)}</text>`;
+    const lines = name ? txt(d.number, -.27 * S, .42 * S, MONO, MUTED_HEX) + txt(name, .3 * S, .5 * S, FONT, INK_HEX) : txt(d.number, 0, .55 * S, MONO, INK_HEX);
+    out.push(d.shape === 'v' ? `<g transform="rotate(-90 ${cx} ${cy})">${lines}</g>` : lines);
+  }
+  for (const z of zs) out.push(`<text x="${ox + z.x * S + 12}" y="${oy + z.y * S}" font-size="13" font-weight="700" letter-spacing="1" fill="#${ACCENT_HEX}" dominant-baseline="central" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">${esc((z.name || 'Area').toUpperCase())}</text>`);
+  for (const it of legend) {
+    const hex = it.t ? teamHex(it.t) : FREE_HEX;
+    out.push(`<rect x="${it.x}" y="${it.y - 6}" width="12" height="12" rx="3" fill="${it.t ? '#' + hex : '#ffffff'}" stroke="#${hex}"${it.t ? '' : ' stroke-dasharray="3 2"'}/>`,
+      `<text x="${it.x + 18}" y="${it.y}" font-size="12" fill="#${INK_HEX}" dominant-baseline="central">${esc(it.label)}</text>`);
+  }
+  out.push('</svg>');
+  return { svg: out.join(''), w: W, h: H };
+}
+async function exportPng(o){
+  const { svg, w, h } = planSVG(o.names);
+  const scale = Math.min(o.large ? 4 : 2, 12000 / Math.max(w, h)); // browsers cap canvas size
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+  if (!blob) throw new Error('png');
+  await saveFile('office-desk-map.png', blob);
+}
+// prints from a hidden frame so only the plan (and the optional list) goes to the printer or PDF
+function printPlan(o){
+  const { svg, w, h } = planSVG(o.names);
+  const wide = w >= h;
+  const rows = desksArr().sort(byNumber).map(d => {
+    const p = d.personId ? state.people.get(d.personId) : null, z = zoneOf(d);
+    return `<tr><td class="n">${esc(d.number)}</td><td>${p ? esc(p.name) : '<span class="m">Free</span>'}</td><td>${esc(p?.team || '')}</td><td>${esc(z?.name || '')}</td></tr>`;
+  }).join('');
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><title>Office Desk Map</title><style>
+    @page{size:${wide ? 'landscape' : 'portrait'};margin:10mm}
+    html,body{margin:0;background:#fff;color:#${INK_HEX};font:12px 'Segoe UI',Arial,sans-serif}
+    .plan svg{display:block;width:100%;height:auto;max-height:${wide ? 180 : 250}mm}
+    .list{break-before:page} h2{font-size:16px;margin:0 0 8px}
+    table{border-collapse:collapse;width:100%} tr{break-inside:avoid}
+    th,td{border-bottom:1px solid #d3dbdd;padding:4px 8px;text-align:left}
+    th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#${MUTED_HEX}}
+    .n{font-family:Consolas,monospace} .m{color:#${MUTED_HEX};font-style:italic}
+  </style></head><body><div class="plan">${svg}</div>${o.list ? `<div class="list"><h2>Who sits where</h2><table><thead><tr><th>Desk</th><th>Person</th><th>Team</th><th>Area</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}</body></html>`;
+  const f = document.createElement('iframe');
+  f.setAttribute('aria-hidden', 'true');
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  f.onload = () => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 1000); };
+  f.srcdoc = doc;
+  document.body.appendChild(f);
+}
+
+/* ---------- Excel floor plan: desks drawn with cells ---------- */
+// Written by hand (the spreadsheet library's free version can't save colours or borders), so it also works offline.
+// One grid square is one square cell; each desk is a block of merged cells with its number and person.
+function colName(i){ let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; } // 0-based
+function xlsxStyleBook(){
+  const lists = { font: [], fill: [], border: [], xf: [] };
+  const idx = (list, v) => { const k = JSON.stringify(v); let i = lists[list].findIndex(e => e.k === k); if (i < 0) { lists[list].push({ k, v }); i = lists[list].length - 1; } return i; };
+  idx('font', {}); idx('fill', { none: 1 }); idx('fill', { gray: 1 }); idx('border', {}); idx('xf', { font: 0, fill: 0, border: 0 });
+  const side = (name, b) => b ? `<${name} style="${b[0]}"><color rgb="FF${b[1].toUpperCase()}"/></${name}>` : `<${name}/>`;
+  return {
+    // o: { font: { b, sz, color }, fill: 'rrggbb', border: { l, r, t, b: [style, 'rrggbb'] }, al: { h, v, wrap, rot } }
+    style: o => idx('xf', { font: idx('font', o.font || {}), fill: o.fill ? idx('fill', { rgb: o.fill }) : 0, border: idx('border', o.border || {}), al: o.al || null }),
+    xml: () => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+      + `<fonts count="${lists.font.length}">${lists.font.map(({ v }) => `<font>${v.b ? '<b/>' : ''}<sz val="${v.sz || 11}"/>${v.color ? `<color rgb="FF${v.color.toUpperCase()}"/>` : ''}<name val="Calibri"/><family val="2"/></font>`).join('')}</fonts>`
+      + `<fills count="${lists.fill.length}">${lists.fill.map(({ v }) => v.rgb ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${v.rgb.toUpperCase()}"/><bgColor indexed="64"/></patternFill></fill>` : `<fill><patternFill patternType="${v.gray ? 'gray125' : 'none'}"/></fill>`).join('')}</fills>`
+      + `<borders count="${lists.border.length}">${lists.border.map(({ v }) => `<border>${side('left', v.l)}${side('right', v.r)}${side('top', v.t)}${side('bottom', v.b)}<diagonal/></border>`).join('')}</borders>`
+      + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
+      + `<cellXfs count="${lists.xf.length}">${lists.xf.map(({ v }) => `<xf numFmtId="0" fontId="${v.font}" fillId="${v.fill}" borderId="${v.border}" xfId="0" applyFont="1" applyFill="1" applyBorder="1"${v.al ? ` applyAlignment="1"><alignment${v.al.h ? ` horizontal="${v.al.h}"` : ''}${v.al.v ? ` vertical="${v.al.v}"` : ''}${v.al.wrap ? ' wrapText="1"' : ''}${v.al.rot ? ` textRotation="${v.al.rot}"` : ''}/></xf>` : '/>'}`).join('')}</cellXfs>`
+      + `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
+  };
+}
+// cells: Map of 'row,col' (0-based) → { s: style index, v: inner XML of an inline string }
+function sheetXml(cells, { cols, merges = [], rowHeights = {}, defaultHt, grid = true, wide, fitPage }){
+  const rows = new Map();
+  for (const [k, c] of cells) { const [r, col] = k.split(',').map(Number); if (!rows.has(r)) rows.set(r, []); rows.get(r).push([col, c]); }
+  const rowNums = [...new Set([...rows.keys(), ...Object.keys(rowHeights).map(Number)])].sort((a, b) => a - b);
+  const data = rowNums.map(r => {
+    const ht = rowHeights[r] ? ` ht="${rowHeights[r]}" customHeight="1"` : '';
+    const cs = (rows.get(r) || []).sort((a, b) => a[0] - b[0]).map(([col, c]) => `<c r="${colName(col)}${r + 1}"${c.s ? ` s="${c.s}"` : ''}${c.v ? ` t="inlineStr"><is>${c.v}</is></c>` : '/>'}`).join('');
+    return `<row r="${r + 1}"${ht}>${cs}</row>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+    + (fitPage ? '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' : '')
+    + `<sheetViews><sheetView workbookViewId="0"${grid ? '' : ' showGridLines="0"'}/></sheetViews>`
+    + `<sheetFormatPr defaultRowHeight="${defaultHt || 15}"${defaultHt ? ' customHeight="1"' : ''}/>`
+    + `<cols>${cols.map(([min, max, w]) => `<col min="${min}" max="${max}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+    + `<sheetData>${data}</sheetData>`
+    + (merges.length ? `<mergeCells count="${merges.length}">${merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '')
+    + (fitPage ? '<printOptions horizontalCentered="1"/>' : '')
+    + '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>'
+    + (fitPage ? `<pageSetup orientation="${wide ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="1"/>` : '')
+    + '</worksheet>';
+}
+function buildPlanXlsx(names){
+  const st = xlsxStyleBook();
+  const txt = v => `<t xml:space="preserve">${esc(v)}</t>`;
+  const run = (v, f) => `<r><rPr>${f.b ? '<b/>' : ''}<sz val="${f.sz}"/><color rgb="FF${f.color.toUpperCase()}"/><rFont val="Calibri"/><family val="2"/></rPr>${txt(v)}</r>`;
+  const { minX, minY, maxX, maxY } = extent();
+  // 0-based cell of a grid square: two title rows, then a one-square margin round the plan
+  const R = y => y - minY + 3, C = x => x - minX + 1;
+  const ref = (x, y, w, h) => `${colName(C(x))}${R(y) + 1}:${colName(C(x + w - 1))}${R(y + h - 1) + 1}`;
+  const cells = new Map(), merges = [], merged = new Set();
+  const put = (r, c, cell) => cells.set(r + ',' + c, cell);
+  const merge = (x, y, w, h) => {
+    const sq = []; for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) sq.push(xx + ',' + yy);
+    if (sq.some(k => merged.has(k))) return; // overlapping desks: leave the second one unmerged
+    sq.forEach(k => merged.add(k)); merges.push(ref(x, y, w, h));
+  };
+  const ds = desksArr().sort(byNumber), zs = [...state.zones.values()];
+  const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
+  put(0, 1, { s: st.style({ font: { b: 1, sz: 14, color: INK_HEX } }), v: txt('Office Desk Map') });
+  put(1, 1, { s: st.style({ font: { sz: 9, color: MUTED_HEX } }), v: txt(`${new Date().toISOString().slice(0, 10)} · ${ds.length} desks · ${seated} seated · ${ds.length - seated} free`) });
+  // areas: a light tint under the desks, with the name in the first free square of the top row
+  const deskSquares = new Set(ds.flatMap(d => cellsOf(d.shape, d.rot || 0, d.x, d.y)));
+  const zoneFill = tint(ACCENT_HEX, .08), zoneStyle = st.style({ fill: zoneFill });
+  for (const z of zs) {
+    for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + y)) put(R(y), C(x), { s: zoneStyle });
+    for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + z.y)) { put(R(z.y), C(x), { s: st.style({ fill: zoneFill, font: { b: 1, sz: 8, color: ACCENT_HEX } }), v: txt((z.name || 'Area').toUpperCase()) }); break; }
+  }
+  for (const d of ds) {
+    const rot = d.rot || 0, p = d.personId ? state.people.get(d.personId) : null, hex = p ? teamHex(p.team) : FREE_HEX;
+    const fill = p ? tint(hex, .25) : 'FFFFFF', line = p ? ['thin', hex] : ['dashed', FREE_HEX];
+    const own = new Set(cellsOf(d.shape, rot, d.x, d.y));
+    // where the number goes: the whole desk, or a corner desk's long side; its short leg is merged separately
+    const sh = SHAPES[d.shape] || SHAPES.h, low = rot === 180 || rot === 270;
+    const lab = d.shape === 'corner' ? { x: d.x, y: d.y + (low ? 2 : 0), w: 4, h: 2 } : { x: d.x, y: d.y, w: sh.w, h: sh.h };
+    const name = names && p ? shortName(p.name) : '';
+    const v = name ? run(d.number, { b: 1, sz: 8, color: MUTED_HEX }) + run('\n' + name, { sz: 8, color: INK_HEX }) : run(d.number, { b: 1, sz: 9, color: INK_HEX });
+    for (const k of own) {
+      const [x, y] = k.split(',').map(Number), b = {};
+      if (!own.has((x - 1) + ',' + y)) b.l = line;
+      if (!own.has((x + 1) + ',' + y)) b.r = line;
+      if (!own.has(x + ',' + (y - 1))) b.t = line;
+      if (!own.has(x + ',' + (y + 1))) b.b = line;
+      const s = st.style({ fill, border: b, font: { sz: 8 }, al: { h: 'center', v: 'center', wrap: 1, rot: d.shape === 'v' ? 90 : 0 } });
+      put(R(y), C(x), { s, v: x === lab.x && y === lab.y ? v : '' });
+    }
+    merge(lab.x, lab.y, lab.w, lab.h);
+    if (d.shape === 'corner') merge(d.x + (rot === 90 || rot === 180 ? 2 : 0), d.y + (low ? 0 : 2), 2, 2);
+  }
+  // legend under the plan: a swatch and the team name, several to a row
+  const planCols = maxX - minX + 2, perRow = Math.max(1, Math.floor(planCols / 10));
+  const ts = [...teams(), [null, 0]], top = R(maxY) + 2;
+  ts.forEach(([t, n], i) => {
+    const r = top + Math.floor(i / perRow), c = 1 + (i % perRow) * 10, hex = t ? teamHex(t) : FREE_HEX, line = t ? ['thin', hex] : ['dashed', FREE_HEX];
+    put(r, c, { s: st.style({ fill: t ? tint(hex, .25) : 'FFFFFF', border: { l: line, r: line, t: line, b: line } }) });
+    put(r, c + 1, { s: st.style({ font: { sz: 9, color: INK_HEX } }), v: txt(t ? ` ${t} (${n})` : ' Free desk') });
+  });
+  const lastCol = Math.max(planCols, perRow * 10) + 1, lastRow = top + Math.ceil(ts.length / perRow);
+  const plan = sheetXml(cells, { cols: [[1, lastCol + 1, 2.86]], merges, rowHeights: { 0: 21 }, defaultHt: 15, grid: false, wide: planCols >= lastRow, fitPage: true });
+  // second sheet: every desk with who sits there
+  const head = st.style({ font: { b: 1, sz: 11, color: INK_HEX }, fill: 'E3EBF8' });
+  const list = new Map();
+  ['Desk', 'Person', 'Team', 'Area'].forEach((h, c) => list.set('0,' + c, { s: head, v: txt(h) }));
+  ds.forEach((d, i) => {
+    const p = d.personId ? state.people.get(d.personId) : null;
+    [d.number, p ? p.name : 'Free', p?.team || '', zoneOf(d)?.name || ''].forEach((v, c) => { if (v) list.set((i + 1) + ',' + c, { v: txt(v) }); });
+  });
+  const listXml = sheetXml(list, { cols: [[1, 1, 10], [2, 2, 30], [3, 3, 22], [4, 4, 22]] });
+  const files = {
+    '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
+    '_rels/.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
+    'xl/workbook.xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Floor plan" sheetId="1" r:id="rId1"/><sheet name="Desks" sheetId="2" r:id="rId2"/></sheets></workbook>',
+    'xl/_rels/workbook.xml.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+    'xl/styles.xml': st.xml(),
+    'xl/worksheets/sheet1.xml': plan,
+    'xl/worksheets/sheet2.xml': listXml
+  };
+  const enc = new TextEncoder();
+  const zip = zipStore(Object.entries(files).map(([name, data]) => ({ name, data: enc.encode(data) })));
+  return new Blob([zip], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 /* ---------- DXF (AutoCAD R12 ASCII) ---------- */
