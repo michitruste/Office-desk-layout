@@ -728,13 +728,20 @@ function inPts(P, px, py){
 // a square belongs to an area when its middle is inside the outline
 const inZone = (z, x, y) => z.pts?.length ? inPts(z.pts, x + .5, y + .5) : x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h;
 function zoneCells(z){ const out = []; for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) if (inZone(z, x, y)) out.push([x, y]); return out; }
-// the name sits on the top-left corner, along the top side that starts there
+// The name sits on the area's longest top side (one with the area just below it), at its left end, so it
+// always touches the area. Ties go to the highest, then the leftmost.
 function zoneAnchor(z){
-  const P = zonePts(z);
-  let i = 0;
-  P.forEach((q, j) => { if (q[1] < P[i][1] || (q[1] === P[i][1] && q[0] < P[i][0])) i = j; });
-  const a = P[i], n = [P[(i + 1) % P.length], P[(i - 1 + P.length) % P.length]].find(q => q[1] === a[1]);
-  return { x: a[0], y: a[1], w: n ? Math.abs(n[0] - a[0]) : z.w };
+  if (!z.pts?.length) return { x: z.x, y: z.y, w: z.w };
+  const P = z.pts;
+  let best = null;
+  P.forEach((a, i) => {
+    const b = P[(i + 1) % P.length];
+    if (a[1] !== b[1]) return;
+    const x = Math.min(a[0], b[0]), w = Math.abs(b[0] - a[0]);
+    if (!inPts(P, x + .5, a[1] + .5)) return; // the area is above this side
+    if (!best || w > best.w || (w === best.w && (a[1] < best.y || (a[1] === best.y && x < best.x)))) best = { x, y: a[1], w };
+  });
+  return best || { x: z.x, y: z.y, w: z.w };
 }
 const shiftZone = (z, dx, dy) => ({ ...z, x: z.x + dx, y: z.y + dy, pts: z.pts && z.pts.map(q => [q[0] + dx, q[1] + dy]) });
 // drops repeated corners, and corners that only double back or sit on a straight side (keepStraight keeps
@@ -806,6 +813,20 @@ function dropCorner(P, i){
   if (straightAt(P, i)) return P.filter((q, j) => j !== i);
   const a = P[(i - 1 + n) % n], c = P[(i + 1) % n], h1 = a[1] === P[i][1];
   return cleanPts(P.map((q, j) => j === i ? (h1 ? [a[0], c[1]] : [c[0], a[1]]) : q), false);
+}
+// an outline pulled in by d squares with its corners rounded by r, so areas side by side keep a gap between
+// them; map turns a point in squares into "x y" in the drawing's units
+function insetRoundPath(P, d, r, map){
+  const n = P.length, norms = P.map((a, i) => {
+    const b = P[(i + 1) % n], dx = Math.sign(b[0] - a[0]), dy = Math.sign(b[1] - a[1]), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    return inPts(P, mx - dy * .01, my + dx * .01) ? [-dy, dx] : [dy, -dx]; // pointing into the area
+  });
+  const Q = P.map((v, i) => { const a = norms[(i - 1 + n) % n], b = norms[i]; return [v[0] + d * (a[0] + b[0]), v[1] + d * (a[1] + b[1])]; });
+  return Q.map((v, i) => {
+    const p = Q[(i - 1 + n) % n], q = Q[(i + 1) % n], lp = Math.hypot(v[0] - p[0], v[1] - p[1]), lq = Math.hypot(q[0] - v[0], q[1] - v[1]);
+    const k = Math.min(r, lp / 2, lq / 2), along = (to, l) => [v[0] + (to[0] - v[0]) / l * k, v[1] + (to[1] - v[1]) / l * k];
+    return (i ? 'L' : 'M') + map(along(p, lp)) + 'Q' + map(v) + ' ' + map(along(q, lq));
+  }).join('') + 'Z';
 }
 const nearestSide = (P, x, y) => {
   let best = 0, bd = Infinity;
@@ -3397,7 +3418,9 @@ function planSVG(names){
     `<rect width="${W}" height="${H}" fill="#ffffff"/>`,
     `<text x="${PAD}" y="30" font-size="20" font-weight="700" fill="#${INK_HEX}">Office Desk Map</text>`,
     `<text x="${PAD}" y="48" font-size="12" fill="#${MUTED_HEX}">${esc(new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }))} · ${ds.length} desks · ${seated} seated · ${ds.length - seated} free</text>`];
-  for (const z of zs) out.push(`<path d="${ptsPath(zonePts(z).map(q => [ox + q[0] * S, oy + q[1] * S]))}" fill="#${tint(ACCENT_HEX, .06)}" stroke="#${tint(ACCENT_HEX, .45)}" stroke-width="1.5" stroke-dasharray="6 4" stroke-linejoin="round"/>`);
+  // areas are pulled in from the grid lines with rounded corners, so two areas side by side show as two shapes
+  const ZIN = .14, toPx = q => `${Math.round((ox + q[0] * S) * 10) / 10} ${Math.round((oy + q[1] * S) * 10) / 10}`;
+  for (const z of zs) out.push(`<path d="${insetRoundPath(zonePts(z), ZIN, .4, toPx)}" fill="#${tint(ACCENT_HEX, .06)}" stroke="#${tint(ACCENT_HEX, .45)}" stroke-width="1.5" stroke-dasharray="6 4"/>`);
   const r2 = v => Math.round(v * 100) / 100;
   for (const d of ds) {
     const sh = SHAPES[d.shape] || SHAPES.h, rot = d.rot || 0, x = ox + d.x * S, y = oy + d.y * S;
@@ -3418,7 +3441,7 @@ function planSVG(names){
     const c = { ink: '#' + INK_HEX, paper: '#ffffff', pillar: '#' + tint(INK_HEX, .3) };
     out.push(`<g transform="translate(${ox} ${oy}) scale(${S})">${fixturesSorted().map(f => fixtureSVG(f, c)).join('')}</g>`);
   }
-  for (const z of zs) out.push(`<text x="${ox + z.x * S + 12}" y="${oy + z.y * S}" font-size="13" font-weight="700" letter-spacing="1" fill="#${ACCENT_HEX}" dominant-baseline="central" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">${esc((z.name || 'Area').toUpperCase())}</text>`);
+  for (const z of zs) { const a = zoneAnchor(z); out.push(`<text x="${ox + a.x * S + 12}" y="${oy + (a.y + ZIN) * S}" font-size="13" font-weight="700" letter-spacing="1" fill="#${ACCENT_HEX}" dominant-baseline="central" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">${esc((z.name || 'Area').toUpperCase())}</text>`); }
   for (const it of legend) {
     const hex = it.t ? teamHex(it.t) : FREE_HEX;
     out.push(`<rect x="${it.x}" y="${it.y - 6}" width="12" height="12" rx="3" fill="${it.t ? '#' + hex : '#ffffff'}" stroke="#${hex}"${it.t ? '' : ' stroke-dasharray="3 2"'}/>`,
@@ -3543,7 +3566,9 @@ function buildPlanXlsx(names){
   for (const z of zs) {
     const cells = zoneCells(z).filter(([x, y]) => !deskSquares.has(x + ',' + y));
     for (const [x, y] of cells) put(R(y), C(x), { s: edgeLines.has(x + ',' + y) ? st.style({ fill: zoneFill, border: wb(x, y) }) : zoneStyle });
-    const top = cells.reduce((a, c) => !a || c[1] < a[1] || (c[1] === a[1] && c[0] < a[0]) ? c : a, null);
+    // the first free square under the name's spot on the map, otherwise the top-left free square
+    const a = zoneAnchor(z), free = cells.filter(c => c[1] === a.y && c[0] >= a.x && c[0] < a.x + a.w).sort((p, q) => p[0] - q[0]);
+    const top = free[0] || cells.reduce((b, c) => !b || c[1] < b[1] || (c[1] === b[1] && c[0] < b[0]) ? c : b, null);
     if (top) put(R(top[1]), C(top[0]), { s: st.style({ fill: zoneFill, border: wb(top[0], top[1]), font: { b: 1, sz: 8, color: ACCENT_HEX } }), v: txt((z.name || 'Area').toUpperCase()) });
   }
   // pillars: dark squares, under the desks so a desk drawn on one still shows its number
