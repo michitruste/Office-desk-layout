@@ -145,6 +145,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .plan.arrange .desk{cursor:grab;touch-action:none}
 .desk.dragging{z-index:6;cursor:grabbing;opacity:.92}
 .desk.blocked .shape{stroke:var(--danger);fill:var(--danger-soft)}
+.desk.ghost{pointer-events:none}
+.desk.ghost.off{display:none}
+.tools [data-act="addDesk"]{cursor:grab;touch-action:none}
+body.placing, body.placing *{cursor:grabbing !important}
 .lbl{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:0 calc(var(--u)*.3);overflow:hidden;pointer-events:none;line-height:1.1;user-select:none;-webkit-user-select:none}
 .lbl.top{bottom:50%}
 .lbl.bottom{top:50%}
@@ -416,7 +420,7 @@ const state = {
   confirm: null,
   didFit: false
 };
-let downloads = true, drag = null, renderPending = false, forcePanelNext = false, needsRenderAfterDrag = false;
+let downloads = true, drag = null, placing = null, renderPending = false, forcePanelNext = false, needsRenderAfterDrag = false;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -580,7 +584,7 @@ function render(forcePanel){
   requestAnimationFrame(() => { renderPending = false; renderNow(); });
 }
 function renderNow(){
-  if (drag) { needsRenderAfterDrag = true; return; }
+  if (drag || placing) { needsRenderAfterDrag = true; return; }
   rebuildTeamColors();
   for (const id of [...state.sel]) if (!state.desks.has(id)) state.sel.delete(id);
   if (state.selectedZone && !state.zones.has(state.selectedZone)) state.selectedZone = null;
@@ -637,9 +641,9 @@ function renderTools(){
   let html;
   if (state.arrange) {
     html = `<span class="lab">Add</span>
-      <button class="btn small" data-act="addDesk" data-shape="h" title="Horizontal desk">${ICON.h}<span>Desk</span></button>
-      <button class="btn small" data-act="addDesk" data-shape="v" title="Vertical desk">${ICON.v}<span>Desk</span></button>
-      <button class="btn small" data-act="addDesk" data-shape="corner" title="Corner desk">${ICON.corner}<span>Corner</span></button>
+      <button class="btn small" data-act="addDesk" data-shape="h" title="Horizontal desk: drag onto the map, or click to add">${ICON.h}<span>Desk</span></button>
+      <button class="btn small" data-act="addDesk" data-shape="v" title="Vertical desk: drag onto the map, or click to add">${ICON.v}<span>Desk</span></button>
+      <button class="btn small" data-act="addDesk" data-shape="corner" title="Corner desk: drag onto the map, or click to add">${ICON.corner}<span>Corner</span></button>
       <button class="btn small" data-act="addRow">${ICON.row}<span>Row</span></button>
       <button class="btn small" data-act="addArea">${ICON.area}<span>Area</span></button>
       <span class="sep"></span>
@@ -895,7 +899,7 @@ function overviewHTML(){
   const ts = teams();
   let html = `<div class="stack" style="gap:4px"><span class="eyebrow">Overview</span>
     <p style="margin:0">${state.arrange
-      ? 'Add single desks or whole rows from the toolbar. Drag desks to move them. To move many at once, drag a box around them with the mouse, or tap “Select several” and tap each one.'
+      ? 'Drag a desk from the toolbar straight onto the map, or add whole rows. Drag desks to move them. To move many at once, drag a box around them with the mouse, or tap “Select several” and tap each one.'
       : 'Select a desk on the map to see who sits there and their details.'}</p></div>
     <div class="overview"><div class="ov"><b>${ds.length}</b><span>Desks</span></div><div class="ov"><b>${seated}</b><span>Seated</span></div><div class="ov"><b>${ds.length - seated}</b><span>Free</span></div></div>`;
   if (noDesk.length) {
@@ -1140,13 +1144,13 @@ function scrollToCell(x, y){
       sc.scrollTo({ left: Math.max(0, px - 40), top: Math.max(0, py - 40), behavior: 'smooth' });
   }));
 }
-function addDesk(shape){
+function addDesk(shape, at){
   const s = SHAPES[shape];
-  const spot = findBox(s.w, s.h);
+  const spot = at || findBox(s.w, s.h);
   const d = { id: uid('d'), number: nextDeskNumber(), shape, rot: 0, x: spot.x, y: spot.y, personId: null };
   setRec('desks', d);
-  selectDesk(d.id, { scrollMap: true });
-  toast(`Added desk ${d.number}. Drag it into place.`);
+  selectDesk(d.id, { scrollMap: !at });
+  toast(at ? `Added desk ${d.number}` : `Added desk ${d.number}. Drag it into place, or next time drag the button straight onto the map.`);
 }
 function rotateDesk(id){
   const d = state.desks.get(id); if (!d) return;
@@ -1550,6 +1554,61 @@ function endDrag(cancelled){
 }
 planEl.addEventListener('pointerup', () => endDrag(false));
 planEl.addEventListener('pointercancel', () => endDrag(true));
+
+/* drag a new desk from the toolbar onto the map (a plain click still adds it in the first free spot) */
+let swallowClick = false;
+$('#tools').addEventListener('pointerdown', e => {
+  swallowClick = false;
+  const b = e.target.closest('[data-act="addDesk"]');
+  if (!b || e.button > 0 || !state.arrange || state.readOnly) return;
+  try { b.setPointerCapture(e.pointerId); } catch {}
+  placing = { shape: b.dataset.shape, sx: e.clientX, sy: e.clientY, moved: false, ghost: null, occ: null, at: null, blocked: false };
+});
+document.addEventListener('pointermove', e => {
+  const p = placing; if (!p) return;
+  if (!p.moved && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 5) return;
+  const s = SHAPES[p.shape];
+  if (!p.moved) {
+    p.moved = true;
+    document.body.classList.add('placing');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = deskHTML({ id: '', number: nextDeskNumber(), shape: p.shape, rot: 0, x: 0, y: 0, personId: null });
+    p.ghost = tmp.firstElementChild;
+    p.ghost.classList.add('ghost', 'dragging'); p.ghost.removeAttribute('tabindex'); p.ghost.setAttribute('aria-hidden', 'true');
+    planEl.appendChild(p.ghost);
+    p.occ = occupancy();
+  }
+  // only show the desk while the pointer is over the visible part of the map
+  const sr = $('#scroll').getBoundingClientRect(), pr = planEl.getBoundingClientRect();
+  const over = e.clientX >= Math.max(sr.left, pr.left) && e.clientX <= Math.min(sr.right, pr.right)
+    && e.clientY >= Math.max(sr.top, pr.top) && e.clientY <= Math.min(sr.bottom, pr.bottom);
+  p.ghost.classList.toggle('off', !over);
+  if (!over) { p.at = null; return; }
+  const c = cellFromEvent(e);
+  const x = Math.max(0, Math.round(c.x - s.w / 2)), y = Math.max(0, Math.round(c.y - s.h / 2));
+  p.at = { x, y };
+  p.blocked = cellsOf(p.shape, 0, x, y).some(k => p.occ.has(k));
+  p.ghost.classList.toggle('blocked', p.blocked);
+  p.ghost.style.setProperty('--x', x); p.ghost.style.setProperty('--y', y);
+});
+function endPlace(cancelled){
+  const p = placing; if (!p) return;
+  placing = null;
+  document.body.classList.remove('placing');
+  p.ghost?.remove();
+  if (!p.moved) return; // the click handler adds it as before
+  swallowClick = true;
+  if (!cancelled && p.at && !p.blocked) { needsRenderAfterDrag = false; addDesk(p.shape, p.at); return; }
+  if (!cancelled) toast(p.at ? 'That spot overlaps another desk' : 'Drop the desk on the map to add it');
+  if (needsRenderAfterDrag) { needsRenderAfterDrag = false; render(); }
+}
+document.addEventListener('pointerup', () => endPlace(false));
+document.addEventListener('pointercancel', () => endPlace(true));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && placing) endPlace(true); });
+// the button still gets a click after a drag; don't also add a desk in the first free spot
+$('#tools').addEventListener('click', e => {
+  if (swallowClick && e.target.closest('[data-act="addDesk"]')) { swallowClick = false; e.stopPropagation(); }
+}, true);
 planEl.addEventListener('click', e => {
   if (e.target.closest('[data-act]')) return;
   if (state.arrange) return; // handled by pointer events
