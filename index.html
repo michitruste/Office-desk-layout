@@ -119,17 +119,29 @@ button,input,select,textarea{font:inherit;color:inherit}
 .plan-msg p{margin:0;color:var(--muted)}
 
 /* Areas */
-/* each area is drawn twice: its tint sits under the desks, its outline, name and resize handle sit over them */
-.zone,.zone-top{position:absolute;left:calc(var(--x)*var(--u));top:calc(var(--y)*var(--u));width:calc(var(--w)*var(--u));height:calc(var(--h)*var(--u));border-radius:6px;pointer-events:none}
-.zone{background:color-mix(in srgb, var(--accent) 5%, transparent);z-index:0}
-.zone.selected{background:color-mix(in srgb, var(--accent) 10%, transparent)}
-.zone-top{border:1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);z-index:4}
-.zone-top.selected{border-style:solid;border-color:var(--accent);z-index:5}
+/* each area is drawn twice: its tint sits under the desks; its outline, handles and name sit over them */
+.zones{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.zfill{z-index:0}
+.zfill path{fill:color-mix(in srgb, var(--accent) 5%, transparent)}
+.zfill path.selected,.zfill path.picked{fill:color-mix(in srgb, var(--accent) 10%, transparent)}
+.ztop{z-index:4}
+.ztop .zline{fill:none;stroke:color-mix(in srgb, var(--accent) 45%, transparent);stroke-width:.07;stroke-dasharray:.26 .17;stroke-linejoin:round}
+.ztop g.selected .zline,.ztop g.picked .zline{stroke:var(--accent);stroke-dasharray:none;stroke-width:.08}
+.ztop .zhit{stroke:transparent;stroke-width:.5}
+.plan.arrange:not(.drawing) .ztop .zhit,.plan.arrange:not(.drawing) .ztop .zside,.plan.arrange:not(.drawing) .ztop .zcorner{pointer-events:all}
+.ztop .zhit.h,.ztop .zside.h{cursor:ns-resize}
+.ztop .zhit.v,.ztop .zside.v{cursor:ew-resize}
+.ztop .zside{fill:var(--sheet);stroke:var(--accent);stroke-width:.1}
+.ztop .zcorner{fill:var(--accent);stroke:var(--sheet);stroke-width:.12;cursor:move}
+.ztop .apre{fill:color-mix(in srgb, var(--accent) 8%, transparent);stroke:var(--accent);stroke-width:.1;stroke-linejoin:round}
+.ztop .aclose{fill:none;stroke:var(--accent);stroke-width:.06;stroke-dasharray:.2 .15;opacity:.7}
+.ztop .astart{fill:var(--sheet);stroke:var(--accent);stroke-width:.12}
+.zone-top{position:absolute;left:calc(var(--x)*var(--u));top:calc(var(--y)*var(--u));width:calc(var(--w)*var(--u));height:0;pointer-events:none;z-index:4}
+.zone-top.selected{z-index:5}
+.fixtures .fx.picked > :not(.clear):not(.hit){stroke:var(--accent) !important}
 .zlabel{position:absolute;left:calc(var(--u)*.5);top:0;transform:translateY(-50%);padding:0 6px;background:var(--sheet);border:0;border-radius:4px;
   font-family:var(--f-display);font-weight:700;font-size:max(11px, calc(var(--u)*.6));letter-spacing:.06em;text-transform:uppercase;color:var(--accent);white-space:nowrap;line-height:1.3;pointer-events:none;max-width:calc(100% - var(--u))}
 .plan.arrange .zlabel{pointer-events:auto;cursor:move;touch-action:none;outline:1px dashed color-mix(in srgb, var(--accent) 50%, transparent)}
-.zhandle{position:absolute;right:-11px;bottom:-11px;width:22px;height:22px;border-radius:50%;background:var(--accent);border:3px solid var(--sheet);box-shadow:0 1px 4px var(--shadow);pointer-events:auto;cursor:nwse-resize;touch-action:none}
-.zhandle::after{content:"";position:absolute;inset:-8px}
 
 /* Desks */
 .desk{position:absolute;left:calc(var(--x)*var(--u));top:calc(var(--y)*var(--u));width:calc(var(--w)*var(--u));height:calc(var(--h)*var(--u));
@@ -475,14 +487,15 @@ const AREA_ALIASES = {
   area: ['area','zone','zona','areaname','zonename','name','nombre'],
   col: LAYOUT_ALIASES.col, row: LAYOUT_ALIASES.row,
   w: ['width','w','ancho','columns'],
-  h: ['height','h','alto','rows']
+  h: ['height','h','alto','rows'],
+  shape: ['shape','outline','corners','points','forma','contorno']
 };
 
 /* ---------- state ---------- */
 const state = {
   desks: new Map(), people: new Map(), zones: new Map(), fixtures: new Map(), settings: new Map(), fieldsDraft: null,
   loaded: false, local: false, readOnly: false,
-  sel: new Set(), selectedZone: null, selectedFixture: null, selectedPerson: null,
+  sel: new Set(), selRoom: new Set(), selectedZone: null, selectedFixture: null, selectedPerson: null,
   tab: 'desk', arrange: false, multi: false, tool: null, query: '', peopleFilter: 'all', noDeskOpen: false,
   zoom: window.innerWidth < 880 ? 0.6 : 1,
   editing: null,      // {id, deskId}: person form
@@ -694,6 +707,141 @@ function clashNote(ids){
   return ` ${c.size} of these desks are on a pillar, across a wall or in a doorway.`;
 }
 
+/* ---------- area outlines ---------- */
+// An area is a closed outline through grid corners whose sides all run across or down. A plain rectangle keeps
+// only x, y, w, h (as older copies of the map expect); any other shape also lists its corners in pts, and
+// x, y, w, h are the box around it.
+const zonePts = z => z.pts?.length ? z.pts : [[z.x, z.y], [z.x + z.w, z.y], [z.x + z.w, z.y + z.h], [z.x, z.y + z.h]];
+function ptsBox(P){ const xs = P.map(q => q[0]), ys = P.map(q => q[1]), x = Math.min(...xs), y = Math.min(...ys); return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }; }
+const ptsArea = P => Math.abs(P.reduce((a, q, i) => { const r = P[(i + 1) % P.length]; return a + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
+const rectPts = (a, b) => { const x0 = Math.min(a[0], b[0]), y0 = Math.min(a[1], b[1]), x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]); return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; };
+// the record fields for an outline; four corners are always a rectangle, which needs no pts
+function zoneShape(P){ return { ...ptsBox(P), pts: P.length === 4 ? undefined : P.map(q => [q[0], q[1]]) }; }
+function inPts(P, px, py){
+  let inside = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [xi, yi] = P[i], [xj, yj] = P[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// a square belongs to an area when its middle is inside the outline
+const inZone = (z, x, y) => z.pts?.length ? inPts(z.pts, x + .5, y + .5) : x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h;
+function zoneCells(z){ const out = []; for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) if (inZone(z, x, y)) out.push([x, y]); return out; }
+// the name sits on the top-left corner, along the top side that starts there
+function zoneAnchor(z){
+  const P = zonePts(z);
+  let i = 0;
+  P.forEach((q, j) => { if (q[1] < P[i][1] || (q[1] === P[i][1] && q[0] < P[i][0])) i = j; });
+  const a = P[i], n = [P[(i + 1) % P.length], P[(i - 1 + P.length) % P.length]].find(q => q[1] === a[1]);
+  return { x: a[0], y: a[1], w: n ? Math.abs(n[0] - a[0]) : z.w };
+}
+const shiftZone = (z, dx, dy) => ({ ...z, x: z.x + dx, y: z.y + dy, pts: z.pts && z.pts.map(q => [q[0] + dx, q[1] + dy]) });
+// drops repeated corners, and corners that only double back or sit on a straight side (keepStraight keeps
+// those last ones, so a side someone just split stays split)
+function cleanPts(P, keepStraight){
+  const q = P.map(c => [c[0], c[1]]);
+  for (let changed = true; changed && q.length > 2;) {
+    changed = false;
+    for (let i = 0; i < q.length && q.length > 2; i++) {
+      const a = q[(i - 1 + q.length) % q.length], b = q[i], c = q[(i + 1) % q.length];
+      const dup = b[0] === c[0] && b[1] === c[1];
+      const line = (a[0] === b[0] && b[0] === c[0]) || (a[1] === b[1] && b[1] === c[1]);
+      const between = Math.min(a[0], c[0]) <= b[0] && b[0] <= Math.max(a[0], c[0]) && Math.min(a[1], c[1]) <= b[1] && b[1] <= Math.max(a[1], c[1]);
+      if (dup || (line && (!keepStraight || !between))) { q.splice(i, 1); changed = true; i--; }
+    }
+  }
+  return q;
+}
+// every side straight across or down, nothing below row or column 0, and no side crossing another
+// (a crossed outline counts a different number of squares than its area)
+function validPts(P){
+  if (P.length < 4 || P.some(q => q[0] < 0 || q[1] < 0)) return false;
+  if (!P.every((q, i) => { const r = P[(i + 1) % P.length]; return (q[0] === r[0]) !== (q[1] === r[1]); })) return false;
+  const A = ptsArea(P), b = ptsBox(P);
+  if (!A || b.w * b.h > 40000) return false;
+  let n = 0; for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) if (inPts(P, x + .5, y + .5)) n++;
+  return n === A;
+}
+const straightAt = (P, i) => { const n = P.length, a = P[(i - 1 + n) % n], b = P[i], c = P[(i + 1) % n]; return (a[1] === b[1]) === (b[1] === c[1]); };
+// moves corner i to (x, y). The two sides meeting there stay straight, so their far ends follow; a far end that
+// sits on a straight side stays where it is and gets a new corner to join it. A point on a straight side slides along it.
+function moveCorner(P, i, x, y){
+  const n = P.length, at = j => P[(j + n) % n];
+  const h1 = at(i - 1)[1] === P[i][1], h2 = P[i][1] === at(i + 1)[1];
+  if (h1 === h2) return P.map((q, j) => j === i ? (h1 ? [x, q[1]] : [q[0], y]) : q);
+  const follow = (q, h) => h ? [q[0], y] : [x, q[1]], straight = (q, r, h) => h ? q[1] === r[1] : q[0] === r[0];
+  const pi = (i - 1 + n) % n, ni = (i + 1) % n, out = [];
+  for (let j = 0; j < n; j++) {
+    if (j === pi) { if (straight(at(i - 2), P[pi], h1)) out.push(P[pi]); out.push(follow(P[pi], h1)); }
+    else if (j === i) out.push([x, y]);
+    else if (j === ni) { out.push(follow(P[ni], h2)); if (straight(P[ni], at(i + 2), h2)) out.push(P[ni]); }
+    else out.push(P[j]);
+  }
+  return out;
+}
+// moves side k (corner k to the next) sideways by d squares, the same way
+function shiftSide(P, k, d){
+  const n = P.length, a = k, b = (k + 1) % n, h = P[a][1] === P[b][1];
+  const mv = q => h ? [q[0], q[1] + d] : [q[0] + d, q[1]], straight = (q, r) => h ? q[1] === r[1] : q[0] === r[0];
+  const out = [];
+  for (let j = 0; j < n; j++) {
+    if (j === a) { if (straight(P[(a - 1 + n) % n], P[a])) out.push(P[a]); out.push(mv(P[a])); }
+    else if (j === b) { out.push(mv(P[b])); if (straight(P[b], P[(b + 1) % n])) out.push(P[b]); }
+    else out.push(P[j]);
+  }
+  return out;
+}
+// a new point on side k at the grid corner nearest (x, y), so part of the side can be pulled out on its own
+function splitSide(P, k, x, y){
+  const a = P[k], b = P[(k + 1) % P.length], h = a[1] === b[1];
+  const lo = h ? Math.min(a[0], b[0]) : Math.min(a[1], b[1]), hi = h ? Math.max(a[0], b[0]) : Math.max(a[1], b[1]);
+  const t = Math.min(hi - 1, Math.max(lo + 1, Math.round(h ? x : y)));
+  if (hi - lo < 2) return null;
+  return [...P.slice(0, k + 1), h ? [t, a[1]] : [a[0], t], ...P.slice(k + 1)];
+}
+// removes a point on a straight side; a corner is squared off instead, flipping it to the far side of its two neighbours
+function dropCorner(P, i){
+  const n = P.length;
+  if (straightAt(P, i)) return P.filter((q, j) => j !== i);
+  const a = P[(i - 1 + n) % n], c = P[(i + 1) % n], h1 = a[1] === P[i][1];
+  return cleanPts(P.map((q, j) => j === i ? (h1 ? [a[0], c[1]] : [c[0], a[1]]) : q), false);
+}
+const nearestSide = (P, x, y) => {
+  let best = 0, bd = Infinity;
+  P.forEach((a, i) => {
+    const b = P[(i + 1) % P.length], cx = Math.max(Math.min(a[0], b[0]), Math.min(Math.max(a[0], b[0]), x)), cy = Math.max(Math.min(a[1], b[1]), Math.min(Math.max(a[1], b[1]), y));
+    const d = (cx - x) ** 2 + (cy - y) ** 2; if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+};
+
+/* ---------- mixed selections ---------- */
+// Areas, walls, doors, windows and pillars can be picked along with desks (a box selection, Shift+click, a paste).
+// They sit in selRoom; a single one on its own uses selectedZone / selectedFixture instead, which opens its panel.
+const roomRec = id => state.zones.get(id) || state.fixtures.get(id);
+const roomCol = id => state.zones.has(id) ? 'zones' : 'fixtures';
+const roomBox = r => r.kind ? fixtureBox(r) : r;
+const shiftRoom = (r, dx, dy) => r.kind ? shiftFixture(r, dx, dy) : shiftZone(r, dx, dy);
+function roomSel(){ const out = new Set(state.selRoom); if (state.selectedZone) out.add(state.selectedZone); if (state.selectedFixture) out.add(state.selectedFixture); return out; }
+const anySel = () => state.sel.size || state.selRoom.size || state.selectedZone || state.selectedFixture;
+function selectMixed(deskIds, roomIds){
+  const d = [...deskIds].filter(id => state.desks.has(id)), r = [...roomIds].filter(roomRec);
+  state.sel = new Set(d); state.selRoom = new Set(); state.selectedZone = null; state.selectedFixture = null;
+  state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  if (!d.length && r.length === 1) { if (state.zones.has(r[0])) state.selectedZone = r[0]; else state.selectedFixture = r[0]; }
+  else state.selRoom = new Set(r);
+  render(true);
+}
+function toggleRoom(id){ const r = roomSel(); if (r.has(id)) r.delete(id); else r.add(id); selectMixed(state.sel, r); }
+// "4 desks, 2 walls and an area"
+function whatOf(deskCount, roomIds){
+  const n = { desk: deskCount };
+  for (const id of roomIds) { const r = roomRec(id); if (r) { const k = r.kind || 'area'; n[k] = (n[k] || 0) + 1; } }
+  const word = { desk: 'desk', area: 'area', wall: 'wall', door: 'door', window: 'window', pillar: 'pillar' };
+  return joinAnd(Object.entries(n).filter(([, c]) => c).map(([k, c]) => `${c} ${word[k]}${c === 1 ? '' : 's'}`)) || 'nothing';
+}
+
 /* ---------- storage ---------- */
 const writing = new Map();
 let active = 0; const waiters = [];
@@ -743,7 +891,7 @@ function undoRedo(isRedo){
   to.push(applyStep(s));
   const ids = s.filter(e => e.col === 'desks' && state.desks.has(e.id)).map(e => e.id);
   state.sel = state.arrange && ids.length ? new Set(ids) : new Set([...state.sel].filter(id => state.desks.has(id)));
-  state.selectedZone = null; state.selectedFixture = null; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.confirm = null; state.editing = null; state.panelMode = null;
   render(true);
   toast(isRedo ? 'Redone' : 'Undone. Press Ctrl+Y to redo.');
 }
@@ -836,6 +984,7 @@ function renderNow(){
   for (const id of [...state.sel]) if (!state.desks.has(id)) state.sel.delete(id);
   if (state.selectedZone && !state.zones.has(state.selectedZone)) state.selectedZone = null;
   if (state.selectedFixture && !state.fixtures.has(state.selectedFixture)) state.selectedFixture = null;
+  for (const id of [...state.selRoom]) if (!roomRec(id)) state.selRoom.delete(id);
   if (state.selectedPerson && !state.people.has(state.selectedPerson)) state.selectedPerson = null;
   const f = forcePanelNext; forcePanelNext = false;
   renderStats(); renderNotices(); renderTools(); renderPlan(); renderLegend(); renderPanel(f);
@@ -902,7 +1051,8 @@ const ICON = {
 const FIX_TIPS = {
   wall: 'Draw walls: drag along the grid lines',
   door: 'Draw a door: drag along a wall for its width, or click for a standard one',
-  window: 'Draw a window: drag along a wall'
+  window: 'Draw a window: drag along a wall',
+  area: 'Draw an area: drag from corner to corner, or click corner by corner for any other shape'
 };
 function renderTools(){
   const ur = state.readOnly ? '' : `<button class="btn small ghost" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo" ${undoLog.undo.length || undoLog.step ? '' : 'disabled'}>${ICON.undo}</button><button class="btn small ghost" data-act="redo" title="Redo (Ctrl+Y)" aria-label="Redo" ${undoLog.redo.length ? '' : 'disabled'}>${ICON.redo}</button>`;
@@ -914,7 +1064,7 @@ function renderTools(){
       <button class="btn small" data-act="addDesk" data-shape="v" title="Vertical desk: drag onto the map, or click to add">${ICON.v}<span>Desk</span></button>
       <button class="btn small" data-act="addDesk" data-shape="corner" title="Corner desk: drag onto the map, or click to add">${ICON.corner}<span>Corner</span></button>
       <button class="btn small" data-act="addRow">${ICON.row}<span>Row</span></button>
-      <button class="btn small" data-act="addArea">${ICON.area}<span>Area</span></button>
+      <button class="btn small" data-act="tool" data-tool="area" aria-pressed="${state.tool === 'area'}" title="${FIX_TIPS.area}">${ICON.area}<span>Area</span></button>
       <span class="sep"></span>
       <span class="lab">Room</span>
       ${['wall', 'door', 'window'].map(k => `<button class="btn small" data-act="tool" data-tool="${k}" aria-pressed="${state.tool === k}" title="${FIX_TIPS[k]}">${ICON[k]}<span>${FIX[k]}</span></button>`).join('')}
@@ -954,16 +1104,49 @@ function numHTML(number){
   const digits = String(number).slice(p.pre.length);
   return `<span class="num">${p.pre ? `<span class="np">${esc(p.pre)}</span>` : ''}${esc(digits)}</span>`;
 }
-function zoneStyle(z){ return `--x:${z.x};--y:${z.y};--w:${z.w};--h:${z.h}`; }
-function zoneFillHTML(z){
-  return `<div class="zone ${state.selectedZone === z.id ? 'selected' : ''}" data-zid="${esc(z.id)}" style="${zoneStyle(z)}"></div>`;
+const ptsPath = P => 'M' + P.map(q => q[0] + ' ' + q[1]).join('L') + 'Z';
+const zoneSel = id => state.selectedZone === id || state.selRoom.has(id);
+const layerAttrs = (cols, rows) => `viewBox="0 0 ${cols} ${rows}" style="width:calc(${cols} * var(--u));height:calc(${rows} * var(--u))" aria-hidden="true"`;
+function zonesFillHTML(zs, cols, rows){
+  return `<svg class="zones zfill" ${layerAttrs(cols, rows)}>${zs.map(z => `<path data-zid="${esc(z.id)}" class="${zoneSel(z.id) ? 'selected' : ''}" d="${ptsPath(zonePts(z))}"/>`).join('')}</svg>`;
 }
-function zoneTopHTML(z){
-  const sel = state.selectedZone === z.id;
-  return `<div class="zone-top ${sel ? 'selected' : ''}" data-zid="${esc(z.id)}" style="${zoneStyle(z)}">
-    <button class="zlabel" data-zid="${esc(z.id)}" ${state.arrange ? '' : 'tabindex="-1"'} aria-label="Area ${esc(z.name)}">${esc(z.name || 'Area')}</button>
-    ${state.arrange && sel ? `<span class="zhandle" data-zh="${esc(z.id)}" aria-hidden="true"></span>` : ''}
-  </div>`;
+// the outline, plus (for the area being edited) a grab line along each side, a handle in the middle of each
+// side that's long enough for one, and a round handle on every corner
+function zoneTopInner(z, handles){
+  const P = zonePts(z);
+  let out = `<path class="zline" d="${ptsPath(P)}"/>`;
+  if (!handles) return out;
+  P.forEach((a, i) => {
+    const b = P[(i + 1) % P.length], h = a[1] === b[1], L = Math.abs(h ? b[0] - a[0] : b[1] - a[1]), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    out += `<line class="zhit ${h ? 'h' : 'v'}" data-zs="${i}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`;
+    if (L >= 2) out += `<rect class="zside ${h ? 'h' : 'v'}" data-zs="${i}" x="${mx - (h ? .45 : .18)}" y="${my - (h ? .18 : .45)}" width="${h ? .9 : .36}" height="${h ? .36 : .9}" rx=".18"/>`;
+  });
+  P.forEach((q, i) => { out += `<circle class="zcorner" data-zc="${i}" cx="${q[0]}" cy="${q[1]}" r=".38"/>`; });
+  return out;
+}
+// the area being drawn corner by corner: the sides so far, the one that follows the pointer, and a faint closing line
+let adraft = null; // { pts: [[x, y], ...], hover: [x, y] | null }
+function draftHTML(){
+  if (!adraft) return '';
+  const P = adraft.hover ? [...adraft.pts, adraft.hover] : adraft.pts, f = P[0], l = P[P.length - 1];
+  return `<path class="apre" d="M${P.map(q => q[0] + ' ' + q[1]).join('L')}"/>`
+    + (P.length > 2 ? `<path class="aclose" d="M${l[0]} ${l[1]}L${f[0]} ${f[1]}"/>` : '')
+    + `<circle class="astart" cx="${f[0]}" cy="${f[1]}" r=".3"/>`;
+}
+function zonesTopHTML(zs, cols, rows){
+  return `<svg class="zones ztop" ${layerAttrs(cols, rows)}>`
+    + zs.map(z => `<g data-zid="${esc(z.id)}" class="${zoneSel(z.id) ? 'selected' : ''}">${zoneTopInner(z, state.arrange && state.selectedZone === z.id)}</g>`).join('')
+    + `<g class="adraft">${draftHTML()}</g></svg>`
+    + zs.map(z => { const a = zoneAnchor(z); return `<div class="zone-top ${zoneSel(z.id) ? 'selected' : ''}" data-zid="${esc(z.id)}" style="--x:${a.x};--y:${a.y};--w:${a.w}">
+    <button class="zlabel" data-zid="${esc(z.id)}" ${state.arrange ? '' : 'tabindex="-1"'} aria-label="Area ${esc(z.name)}">${esc(z.name || 'Area')}</button></div>`; }).join('');
+}
+// redraws one area in place while it's dragged
+function zonePreview(z){
+  const e = CSS.escape(z.id);
+  planEl.querySelector(`.zfill [data-zid="${e}"]`)?.setAttribute('d', ptsPath(zonePts(z)));
+  const g = planEl.querySelector(`.ztop g[data-zid="${e}"]`); if (g) g.innerHTML = zoneTopInner(z, true);
+  const lab = planEl.querySelector(`.zone-top[data-zid="${e}"]`), a = zoneAnchor(z);
+  if (lab) { lab.style.setProperty('--x', a.x); lab.style.setProperty('--y', a.y); lab.style.setProperty('--w', a.w); }
 }
 
 // one fixture drawn in grid units. c holds the colours as CSS values, so the map and the picture export share the drawing.
@@ -983,20 +1166,20 @@ function fixtureSVG(f, c){
 const FIX_ORDER = { pillar: 0, wall: 1, window: 2, door: 3 };
 const fixturesSorted = () => [...state.fixtures.values()].sort((a, b) => FIX_ORDER[a.kind] - FIX_ORDER[b.kind]);
 const FIX_SCREEN = { ink: 'var(--ink)', paper: 'var(--sheet)', pillar: 'color-mix(in srgb, var(--ink) 30%, var(--sheet))' };
-function fixtureInner(f, sel){
+function fixtureInner(f, sel, handles = sel && state.selectedFixture === f.id){
   let out = '';
   if (f.kind === 'door') { const c = doorGeom(f).clear; out += `<rect class="clear" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" style="fill:color-mix(in srgb, var(--warn) 9%, transparent);stroke:color-mix(in srgb, var(--warn) 40%, transparent);stroke-width:.04;stroke-dasharray:.2 .15"/>`; }
   if (sel) out += isSeg(f) ? `<line class="fsel" x1="${f.x1}" y1="${f.y1}" x2="${f.x2}" y2="${f.y2}" style="stroke-width:.7;stroke-linecap:round"/>` : `<rect class="fsel" x="${f.x - .15}" y="${f.y - .15}" width="${f.w + .3}" height="${f.h + .3}" style="fill:none;stroke-width:.3"/>`;
   out += fixtureSVG(f, FIX_SCREEN);
   if (isSeg(f)) out += `<line class="hit" x1="${f.x1}" y1="${f.y1}" x2="${f.x2}" y2="${f.y2}" style="stroke:transparent;stroke-width:.5"/>`;
-  if (sel && state.arrange) out += isSeg(f)
+  if (handles && state.arrange) out += isSeg(f)
     ? `<circle class="fh" data-fh="1" cx="${f.x1}" cy="${f.y1}" r=".42"/><circle class="fh" data-fh="2" cx="${f.x2}" cy="${f.y2}" r=".42"/>`
     : `<circle class="fh r" data-fh="r" cx="${f.x + f.w}" cy="${f.y + f.h}" r=".42"/>`;
   return out;
 }
 function fixturesLayerHTML(cols, rows){
   return `<svg class="fixtures" viewBox="0 0 ${cols} ${rows}" style="width:calc(${cols} * var(--u));height:calc(${rows} * var(--u))" aria-hidden="true">`
-    + fixturesSorted().map(f => `<g class="fx" data-fid="${esc(f.id)}">${fixtureInner(f, state.selectedFixture === f.id)}</g>`).join('')
+    + fixturesSorted().map(f => `<g class="fx" data-fid="${esc(f.id)}">${fixtureInner(f, state.selectedFixture === f.id || state.selRoom.has(f.id))}</g>`).join('')
     + '</svg>';
 }
 
@@ -1016,10 +1199,10 @@ function renderPlan(){
   if (!ds.length && !state.zones.size) {
     planEl.classList.remove('searching');
     // the walls can go in before any desks
-    planEl.innerHTML = (state.fixtures.size || state.tool ? '' : `<div class="plan-msg"><h2>No desks yet</h2>
+    planEl.innerHTML = zonesFillHTML([], cols, rows) + (state.fixtures.size || state.tool ? '' : `<div class="plan-msg"><h2>No desks yet</h2>
       <p>Open your desk-map-data.json, build the floor row by row, import a layout from Excel, or start from a small starter layout. To draw the room's walls first, turn on Arrange desks.</p>
       <div class="row2">${state.readOnly ? '' : `<button class="btn primary" data-act="addRow">${ICON.row}Add a row of desks</button><button class="btn" data-act="openData">Open a data file</button><button class="btn" data-act="openImport">Import from Excel</button><button class="btn" data-act="starter">Starter layout</button>`}</div></div>`)
-      + fixturesLayerHTML(cols, rows);
+      + fixturesLayerHTML(cols, rows) + zonesTopHTML([], cols, rows);
     return;
   }
   const q = state.query.trim().toLowerCase();
@@ -1033,10 +1216,10 @@ function renderPlan(){
   }
   planEl.classList.toggle('searching', !!q);
   const zs = [...state.zones.values()], clash = fixtureConflicts(ds);
-  planEl.innerHTML = zs.map(zoneFillHTML).join('')
+  planEl.innerHTML = zonesFillHTML(zs, cols, rows)
     + ds.sort((a,b) => (a.y - b.y) || (a.x - b.x)).map(d => deskHTML(d, hits, clash)).join('')
     + fixturesLayerHTML(cols, rows)
-    + zs.map(zoneTopHTML).join('');
+    + zonesTopHTML(zs, cols, rows);
 }
 
 function renderLegend(){
@@ -1061,7 +1244,7 @@ function renderPanel(force){
   if (state.tab === 'people') { body.innerHTML = peoplePanelHTML(); return; }
   if (state.selectedZone) { body.innerHTML = zonePanelHTML(); return; }
   if (state.selectedFixture) { body.innerHTML = fixturePanelHTML(); return; }
-  if (state.sel.size > 1) { body.innerHTML = groupPanelHTML(); return; }
+  if (state.sel.size > 1 || state.selRoom.size) { body.innerHTML = groupPanelHTML(); return; }
   body.innerHTML = state.sel.size === 1 ? deskPanelHTML() : overviewHTML();
 }
 
@@ -1147,27 +1330,33 @@ function deskPanelHTML(){
   return html;
 }
 
-function groupPanelHTML(){
-  const ds = [...state.sel].map(id => state.desks.get(id)).filter(Boolean).sort(byNumber);
-  const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
-  const range = ds.length ? `Desks ${ds[0].number} – ${ds[ds.length - 1].number}` : '';
-  const ro = state.readOnly;
-  let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">Selection</span><div class="dnum">${ds.length} desks</div></div>
-    <button class="btn small ghost" data-act="deselect">Clear</button></div>
-    <p class="sm muted" style="margin:0"><span class="mono">${esc(range)}</span> · ${seated} seated · ${ds.length - seated} free</p>`;
-  if (!state.arrange || ro) return html + `<p class="sm muted" style="margin:0">Turn on Arrange desks to move or renumber these desks.</p>`;
-  html += `<div class="box"><h3>Move together</h3>
-      <div class="row2" style="align-items:flex-start;gap:14px">
-        <div class="nudge" role="group" aria-label="Nudge selection">
+const nudgeHTML = () => `<div class="nudge" role="group" aria-label="Nudge selection">
           <span></span><button data-act="nudge" data-dx="0" data-dy="-1" aria-label="Move up">↑</button><span></span>
           <button data-act="nudge" data-dx="-1" data-dy="0" aria-label="Move left">←</button><span>1 sq</span><button data-act="nudge" data-dx="1" data-dy="0" aria-label="Move right">→</button>
           <span></span><button data-act="nudge" data-dx="0" data-dy="1" aria-label="Move down">↓</button><span></span>
-        </div>
-        <span class="sm muted" style="flex:1;min-width:140px">Or drag any selected desk on the map. Desks can't be dropped on top of others. Press Delete to remove them.</span>
+        </div>`;
+function groupPanelHTML(){
+  const ds = [...state.sel].map(id => state.desks.get(id)).filter(Boolean).sort(byNumber);
+  const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
+  const range = ds.length > 1 ? `Desks ${ds[0].number} – ${ds[ds.length - 1].number}` : ds.length ? `Desk ${ds[0].number}` : '';
+  const ro = state.readOnly, room = [...state.selRoom], what = whatOf(ds.length, room);
+  let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">Selection</span><div class="dnum">${room.length ? `${ds.length + room.length} items` : `${ds.length} desks`}</div></div>
+    <button class="btn small ghost" data-act="deselect">Clear</button></div>
+    <p class="sm muted" style="margin:0">${room.length ? esc(what) : ''}${room.length && ds.length ? ' · ' : ''}${ds.length ? `<span class="mono">${esc(range)}</span> · ${seated} seated · ${ds.length - seated} free` : ''}</p>`;
+  if (!state.arrange || ro) return html + `<p class="sm muted" style="margin:0">Turn on Arrange desks to move or renumber these desks.</p>`;
+  if (!ds.length) return html + `<div class="box"><h3>Move together</h3>${nudgeHTML()}<span class="sm muted">Or drag any of them on the map, or use the arrow keys. Ctrl+C and Ctrl+V copy and paste them where your mouse is.</span>
+      <div class="row2"><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button></div></div>
+    ${state.confirm === 'deleteDesk'
+      ? `<div class="confirm"><span>Delete ${esc(what)}?</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete them</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+      : `<div><button class="btn small danger" data-act="deleteSel">Delete ${esc(what)}</button></div>`}`;
+  html += `<div class="box"><h3>Move together</h3>
+      <div class="row2" style="align-items:flex-start;gap:14px">
+        ${nudgeHTML()}
+        <span class="sm muted" style="flex:1;min-width:140px">Or drag any selected desk on the map${room.length ? ', and the walls and areas picked with them come along' : ''}. Desks can't be dropped on top of others. Press Delete to remove them.</span>
       </div></div>
-    <div class="box"><h3>Copy, rotate and flip</h3>
-      <div class="row2"><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button><button class="btn small" data-act="rotateSel" title="R">${ICON.rotate}Rotate</button><button class="btn small" data-act="mirrorH">${ICON.mirrorH}Flip left–right</button><button class="btn small" data-act="mirrorV">${ICON.mirrorV}Flip top–bottom</button></div>
-      <span class="sm muted">Copies are free desks with new numbers. Ctrl+C and Ctrl+V copy and paste them where your mouse is. Rotate (or R) turns the group a quarter turn clockwise. Rotating and flipping keep each desk's number and person.</span></div>
+    <div class="box"><h3>${room.length ? 'Copy' : 'Copy, rotate and flip'}</h3>
+      <div class="row2"><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button>${room.length ? '' : `<button class="btn small" data-act="rotateSel" title="R">${ICON.rotate}Rotate</button><button class="btn small" data-act="mirrorH">${ICON.mirrorH}Flip left–right</button><button class="btn small" data-act="mirrorV">${ICON.mirrorV}Flip top–bottom</button>`}</div>
+      <span class="sm muted">Copies are free desks with new numbers${room.length ? ', with the walls and areas in the same places around them' : ''}. Ctrl+C and Ctrl+V copy and paste them where your mouse is.${room.length ? ' Rotating and flipping work on desks only, so select just desks for those.' : " Rotate (or R) turns the group a quarter turn clockwise. Rotating and flipping keep each desk's number and person."}</span></div>
     <div class="box"><h3>Renumber these desks</h3>
       <div class="grid2">
         <div class="stack"><label class="l" for="grpStart">Start at</label><input class="input mono" id="grpStart" value="${esc(ds[0]?.number || nextDeskNumber())}"></div>
@@ -1178,31 +1367,31 @@ function groupPanelHTML(){
     </div>
     <div class="row2"><button class="btn small" data-act="makeArea">${ICON.area}Make an area around them</button><button class="btn small" data-act="growSel">Add touching desks</button></div>
     ${state.confirm === 'deleteDesk'
-      ? `<div class="confirm"><span>Delete these ${ds.length} desks?${seated ? ` ${seated} ${seated === 1 ? 'person' : 'people'} will be left without a desk until desks with the same numbers are added again.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete ${ds.length} desks</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
-      : `<div><button class="btn small danger" data-act="deleteSel">Delete ${ds.length} desks</button></div>`}`;
+      ? `<div class="confirm"><span>Delete ${room.length ? esc(what) : `these ${ds.length} desks`}?${seated ? ` ${seated} ${seated === 1 ? 'person' : 'people'} will be left without a desk until desks with the same numbers are added again.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">${room.length ? 'Delete them' : `Delete ${ds.length} desks`}</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+      : `<div><button class="btn small danger" data-act="deleteSel">Delete ${room.length ? esc(what) : `${ds.length} desks`}</button></div>`}`;
   return html;
 }
 
 function zonePanelHTML(){
   const z = state.zones.get(state.selectedZone);
   if (!z) return overviewHTML();
-  const inside = desksArr().filter(d => d.x >= z.x && d.y >= z.y && d.x < z.x + z.w && d.y < z.y + z.h);
-  const seated = inside.filter(d => d.personId && state.people.has(d.personId)).length;
+  const inside = desksArr().filter(d => inZone(z, d.x, d.y));
+  const seated = inside.filter(d => d.personId && state.people.has(d.personId)).length, shaped = !!z.pts?.length, sq = shaped ? ptsArea(z.pts) : z.w * z.h;
   let html = `<div class="dhead"><div class="stack" style="gap:4px"><span class="eyebrow">Area</span><div class="dnum">${esc(z.name || 'Area')}</div></div>
     <button class="btn small ghost" data-act="deselect">Close</button></div>
-    <p class="sm muted" style="margin:0">${inside.length} desks · ${seated} seated · ${inside.length - seated} free</p>`;
+    <p class="sm muted" style="margin:0">${inside.length} desks · ${seated} seated · ${inside.length - seated} free · ${sq} squares${shaped ? `, ${z.pts.length} corners` : ''}</p>`;
   if (state.arrange && !state.readOnly) {
     html += `<div class="box"><h3>Area setup</h3>
       <div class="stack"><label class="l" for="zoneName">Name</label><input class="input" id="zoneName" value="${esc(z.name)}"></div>
       <div class="grid2">
         <div class="stack"><label class="l" for="zoneX">Column</label><input class="input mono" id="zoneX" type="number" min="0" value="${z.x}"></div>
         <div class="stack"><label class="l" for="zoneY">Row</label><input class="input mono" id="zoneY" type="number" min="0" value="${z.y}"></div>
-        <div class="stack"><label class="l" for="zoneW">Width</label><input class="input mono" id="zoneW" type="number" min="3" value="${z.w}"></div>
-        <div class="stack"><label class="l" for="zoneH">Height</label><input class="input mono" id="zoneH" type="number" min="2" value="${z.h}"></div>
+        ${shaped ? '' : `<div class="stack"><label class="l" for="zoneW">Width</label><input class="input mono" id="zoneW" type="number" min="1" value="${z.w}"></div>
+        <div class="stack"><label class="l" for="zoneH">Height</label><input class="input mono" id="zoneH" type="number" min="1" value="${z.h}"></div>`}
       </div>
-      <div><button class="btn small primary" data-act="saveZone">Save area</button></div>
-      <span class="sm muted">On the map, drag the area's name to move it and the round handle in its corner to resize it. Both stay on top of desks. Moving an area doesn't move the desks in it. Press Delete to remove the area; its desks stay.</span>
-      <div class="row2"><button class="btn small" data-act="selectInZone">Select the desks inside</button></div>
+      <div class="row2"><button class="btn small primary" data-act="saveZone">Save area</button>${shaped ? '<button class="btn small" data-act="zoneRect">Make it a rectangle</button>' : ''}</div>
+      <span class="sm muted">On the map, drag the area's name to move it. Drag a round corner or a side's handle to change its size and shape. Double-click a side to add a corner there, then drag part of the side out or in; double-click a corner to square it off. Moving an area doesn't move the desks in it. Press Delete to remove the area; its desks stay.</span>
+      <div class="row2"><button class="btn small" data-act="selectInZone">Select the desks inside</button><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button></div>
       ${state.confirm === 'deleteZone'
         ? `<div class="confirm"><span>Delete the area “${esc(z.name)}”? The desks inside stay where they are.</span><div class="row2"><button class="btn small danger solid" data-act="deleteZoneYes">Delete area</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
         : `<div><button class="btn small danger" data-act="deleteZone">Delete area</button></div>`}</div>`;
@@ -1233,7 +1422,7 @@ function fixturePanelHTML(){
       : num('fixX', 'Column', f.x, 0) + num('fixY', 'Row', f.y, 0) + num('fixW', 'Width', f.w, 1) + num('fixH', 'Height', f.h, 1)}</div>
     <div class="row2"><button class="btn small primary" data-act="saveFixture">Save</button>${door ? '<button class="btn small" data-act="flipDoor" data-bit="1">Open to the other side</button><button class="btn small" data-act="flipDoor" data-bit="2">Hinge at the other end</button>' : ''}</div>
     <span class="sm muted">Drag it on the map to move it, and drag the round ${seg ? 'handles to move its ends' : 'handle to resize it'}. Arrow keys nudge it. Press Delete to remove it.${door ? ' The shaded squares are where the door swings; desks there are flagged.' : ''}</span>
-    <div><button class="btn small danger" data-act="deleteFixture">Delete ${FIX[f.kind].toLowerCase()}</button></div></div>`;
+    <div class="row2"><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button><button class="btn small danger" data-act="deleteFixture">Delete ${FIX[f.kind].toLowerCase()}</button></div></div>`;
   return html;
 }
 
@@ -1498,7 +1687,7 @@ function addRow(){
     setRec('desks', d); ids.push(d.id);
   });
   const waited = seatWaiting();
-  state.panelMode = null; state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null;
+  state.panelMode = null; state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.tab = 'desk'; state.confirm = null;
   render(true);
   scrollToCell(at.x, at.y);
   toast(`Added ${total} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the whole row.` + waitNote(waited));
@@ -1506,7 +1695,7 @@ function addRow(){
 
 /* ---------- actions ---------- */
 function selectDesk(id, opts = {}){
-  state.sel = new Set([id]); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.sel = new Set([id]); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
   const d = state.desks.get(id);
   state.selectedPerson = d && d.personId ? d.personId : null;
   render(true);
@@ -1514,12 +1703,11 @@ function selectDesk(id, opts = {}){
   if (opts.scrollPanel && window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
 }
 function toggleInSelection(id){
-  state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
-  if (state.sel.has(id)) state.sel.delete(id); else state.sel.add(id);
-  render(true);
+  const d = new Set(state.sel); if (d.has(id)) d.delete(id); else d.add(id);
+  selectMixed(d, roomSel());
 }
 function selectSet(ids){
-  state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
+  state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
   render(true);
 }
 function scrollToCell(x, y){
@@ -1557,13 +1745,16 @@ function changeShape(id, shape){
   patchRec('desks', id, { shape, rot: 0 }); render(true);
 }
 function moveSelection(dx, dy){
-  const ids = [...state.sel]; if (!ids.length) return false;
+  const ids = [...state.sel], room = [...roomSel()].map(roomRec).filter(Boolean);
+  if (!ids.length && !room.length) return false;
+  if (room.some(r => { const b = roomBox(r); return b.x + dx < 0 || b.y + dy < 0; })) return false;
   const occ = occupancy(state.sel);
   for (const id of ids) {
     const d = state.desks.get(id);
     if (collides(id, d.shape, d.rot || 0, d.x + dx, d.y + dy, occ)) { toast('That spot overlaps another desk'); return false; }
   }
   for (const id of ids) { const d = state.desks.get(id); patchRec('desks', id, { x: d.x + dx, y: d.y + dy }); }
+  for (const r of room) patchRec(roomCol(r.id), r.id, shiftRoom(r, dx, dy));
   render(true);
   return true;
 }
@@ -1580,7 +1771,8 @@ function renumberDesks(list, start, order){
   return null;
 }
 function deleteSelection(){
-  const n = state.sel.size;
+  const n = state.sel.size, room = [...state.selRoom].filter(roomRec), what = room.length ? whatOf(n, room) : null;
+  for (const id of room) delRec(roomCol(id), id);
   const one = n === 1 ? state.desks.get(single())?.number : null;
   let kept = 0;
   for (const id of state.sel) {
@@ -1589,26 +1781,29 @@ function deleteSelection(){
     if (d && d.personId && state.people.has(d.personId)) { setPending(d.personId, [...pendingOf(state.people.get(d.personId)), d.number]); kept++; }
     delRec('desks', id);
   }
-  state.sel = new Set(); state.confirm = null; render(true);
-  toast((one ? `Deleted desk ${one}.` : `Deleted ${n} desks.`) + (kept ? ` ${kept === 1 ? 'The person seated there goes' : `The ${kept} people seated there go`} back automatically if you add a desk with the same number.` : ''));
+  state.sel = new Set(); state.selRoom = new Set(); state.confirm = null; render(true);
+  toast((what ? `Deleted ${what}.` : one ? `Deleted desk ${one}.` : `Deleted ${n} desks.`) + (kept ? ` ${kept === 1 ? 'The person seated there goes' : `The ${kept} people seated there go`} back automatically if you add a desk with the same number.` : ''));
 }
 /* copy, paste, duplicate and flip */
-let clipboard = null;   // { w, h, x0, y0, items: [{ shape, rot, dx, dy }] }, offsets from the copied block's top-left
+let clipboard = null;   // { w, h, x0, y0, items: [{ shape, rot, dx, dy }], room: [{ col, rec }] }, offsets from the copied block's top-left
 let pointerCell = null; // where the mouse last was over the map, so a paste lands there
 function selectedDesks(){ return [...state.sel].map(id => state.desks.get(id)).filter(Boolean); }
-function boundsOf(list){
+const selectedRoom = () => [...roomSel()].map(roomRec).filter(Boolean);
+function boundsOf(list, room = []){
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const d of list) { const s = SHAPES[d.shape] || SHAPES.h; x0 = Math.min(x0, d.x); y0 = Math.min(y0, d.y); x1 = Math.max(x1, d.x + s.w); y1 = Math.max(y1, d.y + s.h); }
+  for (const r of room) { const b = roomBox(r); x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
   return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
 }
-function clipOf(list){
-  const b = boundsOf(list);
-  return { w: b.w, h: b.h, x0: b.x0, y0: b.y0, items: list.map(d => ({ shape: d.shape, rot: d.rot || 0, dx: d.x - b.x0, dy: d.y - b.y0 })) };
+function clipOf(list, room = []){
+  const b = boundsOf(list, room);
+  return { w: b.w, h: b.h, x0: b.x0, y0: b.y0, items: list.map(d => ({ shape: d.shape, rot: d.rot || 0, dx: d.x - b.x0, dy: d.y - b.y0 })),
+    room: room.map(r => { const { id, ...rec } = shiftRoom(r, -b.x0, -b.y0); return { col: roomCol(id), rec }; }) };
 }
 function copySelection(){
-  const list = selectedDesks(); if (!list.length) return;
-  clipboard = clipOf(list);
-  toast(`Copied ${list.length === 1 ? 'desk ' + list[0].number : list.length + ' desks'}. Press Ctrl+V to paste where your mouse is.`);
+  const list = selectedDesks(), room = selectedRoom(); if (!list.length && !room.length) return;
+  clipboard = clipOf(list, room);
+  toast(`Copied ${list.length === 1 && !room.length ? 'desk ' + list[0].number : whatOf(list.length, room.map(r => r.id))}. Press Ctrl+V to paste where your mouse is.`);
 }
 // the free spot nearest to `want` where the whole block fits, otherwise the first free spot on the map
 function pasteClip(clip, want){
@@ -1627,20 +1822,27 @@ function pasteClip(clip, want){
   const placed = clip.items.map(it => ({ shape: it.shape, rot: it.rot, x: spot.x + it.dx, y: spot.y + it.dy })).sort((a, b) => (a.y - b.y) || (a.x - b.x));
   const nums = numberSeq(nextDeskNumber(), placed.length);
   const ids = placed.map((p, i) => { const d = { id: uid('d'), number: nums[i], ...p, personId: null }; setRec('desks', d); return d.id; });
+  // walls and areas come along at the same offsets; a copied area gets "copy" added to its name
+  const roomIds = (clip.room || []).map(({ col, rec }) => {
+    const r = { id: uid(col === 'zones' ? 'z' : 'f'), ...shiftRoom(rec, spot.x, spot.y) };
+    if (col === 'zones') { r.name = `${rec.name || 'Area'} copy`; if (!r.pts) delete r.pts; }
+    setRec(col, r); return r.id;
+  });
   const waited = seatWaiting();
-  state.sel = new Set(ids); state.selectedZone = null; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
-  render(true); scrollToCell(spot.x, spot.y);
-  toast((ids.length === 1 ? `Added desk ${nums[0]}.` : `Added ${ids.length} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the group.`) + waitNote(waited));
+  selectMixed(ids, roomIds); scrollToCell(spot.x, spot.y);
+  const what = roomIds.length ? whatOf(ids.length, roomIds) : '';
+  toast((what ? `Added ${what}.${ids.length ? ` New desk numbers start at ${nums[0]}.` : ''}${ids.length + roomIds.length > 1 ? ' Drag any of them to move the group.' : ''}`
+    : ids.length === 1 ? `Added desk ${nums[0]}.` : `Added ${ids.length} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the group.`) + waitNote(waited));
 }
 // copies without a mouse position go just to the right of the original
 const besideOf = c => ({ x: c.x0 + c.w + 1, y: c.y0 });
 function pasteClipboard(){
-  if (!clipboard) { toast('Select desks and press Ctrl+C to copy them first'); return; }
+  if (!clipboard) { toast('Select desks, walls or areas and press Ctrl+C to copy them first'); return; }
   pasteClip(clipboard, pointerCell ? { x: Math.round(pointerCell.x - clipboard.w / 2), y: Math.round(pointerCell.y - clipboard.h / 2) } : besideOf(clipboard));
 }
 function duplicateSelection(){
-  const list = selectedDesks(); if (!list.length) return;
-  const clip = clipOf(list);
+  const list = selectedDesks(), room = selectedRoom(); if (!list.length && !room.length) return;
+  const clip = clipOf(list, room);
   pasteClip(clip, besideOf(clip));
 }
 // turns the selected desks a quarter turn clockwise as one block, around the block's centre
@@ -1675,11 +1877,38 @@ function mirrorSelection(axis){
 }
 function setTool(t){
   if (t && !state.arrange) setArrange(true);
-  state.tool = t;
-  if (t) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; }
+  state.tool = t; adraft = null;
+  if (t) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.confirm = null; }
   render(true);
-  if (t) toast(`Drag along the grid lines to draw ${t === 'wall' ? 'walls' : t === 'door' ? 'a door, or click for a 2-square one' : 'a window, or click for a 2-square one'}. Press Esc or click ${FIX[t]} again when you're done.`);
+  if (t === 'area') toast('Drag from one corner to the opposite one for a rectangle. For any other shape, click corner by corner and click the first corner again (or press Enter) to finish. Esc cancels.');
+  else if (t) toast(`Drag along the grid lines to draw ${t === 'wall' ? 'walls' : t === 'door' ? 'a door, or click for a 2-square one' : 'a window, or click for a 2-square one'}. Press Esc or click ${FIX[t]} again when you're done.`);
 }
+function addZone(P){
+  const z = { id: uid('z'), name: 'New area', ...zoneShape(P) }; if (!z.pts) delete z.pts;
+  setRec('zones', z);
+  state.tool = null; adraft = null;
+  state.sel = new Set(); state.selRoom = new Set(); state.selectedZone = z.id; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.panelMode = null; state.editing = null;
+  render(true);
+  requestAnimationFrame(() => requestAnimationFrame(() => { const i = $('#zoneName'); if (i) { i.focus(); i.select(); } }));
+  toast('Added an area. Type its name. Drag its round corners or its sides to change its shape.');
+}
+// a click while drawing an area corner by corner: each side runs straight across or down from the last corner
+function draftClick(p){
+  const P = adraft.pts, f = P[0], l = P[P.length - 1];
+  if (P.length >= 3 && p[0] === f[0] && p[1] === f[1]) { finishDraft(); return; }
+  const q = Math.abs(p[0] - l[0]) >= Math.abs(p[1] - l[1]) ? [p[0], l[1]] : [l[0], p[1]];
+  if (q[0] === l[0] && q[1] === l[1]) { if (P.length >= 3) finishDraft(); return; } // a second click on the last corner finishes too
+  P.push(q); adraft.hover = null; drawDraft();
+}
+function finishDraft(){
+  const P = adraft.pts.map(q => [...q]), f = P[0], l = P[P.length - 1];
+  // back to the first corner, turning once if it's not straight ahead
+  if (P.length > 1 && l[0] !== f[0] && l[1] !== f[1]) { const k = P[P.length - 2], across = k[1] === l[1]; P.push(across ? [l[0], f[1]] : [f[0], l[1]]); }
+  const C = cleanPts(P, false);
+  if (!validPts(C)) { toast("That outline doesn't close into an area: its sides cross or it has no inside. Keep clicking corners, press Backspace to undo the last one, or Esc to start over."); return; }
+  addZone(C);
+}
+function drawDraft(){ const g = planEl.querySelector('.ztop .adraft'); if (g) g.innerHTML = draftHTML(); }
 function addFixture(f){
   const rec = { id: uid('f'), ...(isSeg(f) ? normSeg(f) : f) };
   setRec('fixtures', rec);
@@ -1714,12 +1943,12 @@ function saveFixture(){
 }
 function deleteFixture(){
   const f = state.fixtures.get(state.selectedFixture); if (!f) return;
-  delRec('fixtures', f.id); state.selectedFixture = null; state.confirm = null; render(true);
+  delRec('fixtures', f.id); state.selectedFixture = null; state.selRoom = new Set(); state.confirm = null; render(true);
   toast(`Deleted the ${FIX[f.kind].toLowerCase()}. Ctrl+Z brings it back.`);
 }
 function deleteSelectedZone(){
   const z = state.zones.get(state.selectedZone);
-  delRec('zones', state.selectedZone); state.selectedZone = null; state.selectedFixture = null; state.confirm = null; render(true);
+  delRec('zones', state.selectedZone); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.confirm = null; render(true);
   toast(`Deleted area ${z?.name || ''}`.trim());
 }
 function addArea(fromSelection){
@@ -1736,7 +1965,7 @@ function addArea(fromSelection){
     z = { id: uid('z'), name: 'New area', x: Math.max(1, Math.floor(vx / u) + 1), y: Math.max(1, Math.floor(vy / u) + 1), w: 16, h: 10 };
   }
   setRec('zones', z);
-  state.sel = new Set(); state.selectedZone = z.id; state.selectedFixture = null; state.tab = 'desk'; state.confirm = null; state.panelMode = null;
+  state.sel = new Set(); state.selectedZone = z.id; state.selectedFixture = null; state.selRoom = new Set(); state.tab = 'desk'; state.confirm = null; state.panelMode = null;
   render(true);
   requestAnimationFrame(() => requestAnimationFrame(() => { const i = $('#zoneName'); if (i) { i.focus(); i.select(); } }));
 }
@@ -1861,7 +2090,7 @@ document.addEventListener('click', e => {
     case 'toggleMulti': state.multi = !state.multi; renderTools(); toast(state.multi ? 'Tap desks to add or remove them from the selection' : 'Tapping a desk selects just that desk'); break;
     case 'cancelConfirm': state.confirm = null; render(true); break;
     case 'starter': addStarter(); break;
-    case 'deselect': state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; render(true); break;
+    case 'deselect': state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.selectedPerson = null; state.confirm = null; render(true); break;
     case 'rotate': if (one) rotateDesk(one); break;
     case 'saveNum': saveDeskNumber(); break;
     case 'selectConnected': if (one) { const s = connectedDesks(one); selectSet(s); toast(`Selected ${s.size} desks`); } break;
@@ -1882,18 +2111,19 @@ document.addEventListener('click', e => {
     case 'openPerson': {
       const at = seatIndex().get(b.dataset.id);
       if (at) selectDesk(at.id, { scrollMap: true });
-      else { state.selectedPerson = b.dataset.id; state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.tab = 'people'; state.confirm = null; render(true); }
+      else { state.selectedPerson = b.dataset.id; state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.tab = 'people'; state.confirm = null; render(true); }
       break;
     }
-    case 'openZone': state.selectedZone = b.dataset.id; state.selectedFixture = null; state.sel = new Set(); state.confirm = null; render(true); { const z = state.zones.get(b.dataset.id); if (z) scrollToCell(z.x, z.y); } break;
+    case 'openZone': state.selectedZone = b.dataset.id; state.selectedFixture = null; state.selRoom = new Set(); state.sel = new Set(); state.confirm = null; render(true); { const z = state.zones.get(b.dataset.id); if (z) scrollToCell(z.x, z.y); } break;
     case 'saveZone': saveZoneName(); break;
     case 'selectInZone': case 'filterZone': {
       const z = state.zones.get(state.selectedZone); if (!z) break;
-      const inside = desksArr().filter(d => d.x >= z.x && d.y >= z.y && d.x < z.x + z.w && d.y < z.y + z.h).map(d => d.id);
+      const inside = desksArr().filter(d => inZone(z, d.x, d.y)).map(d => d.id);
       selectSet(inside); toast(`Selected ${inside.length} desks in ${z.name || 'this area'}`); break;
     }
     case 'deleteZone': state.confirm = 'deleteZone'; renderPanel(true); break;
     case 'deleteZoneYes': deleteSelectedZone(); break;
+    case 'zoneRect': { const z = state.zones.get(state.selectedZone); if (z) { patchRec('zones', z.id, { pts: undefined }); render(true); toast('The area is now the rectangle around its old outline'); } break; }
     case 'undo': undoRedo(false); break;
     case 'redo': undoRedo(true); break;
     case 'duplicate': duplicateSelection(); break;
@@ -2002,7 +2232,9 @@ function saveZoneName(){
   if (!v) { toast('Enter a name for the area'); return; }
   const num = (sel, min) => { const n = parseInt($(sel)?.value, 10); return isNaN(n) ? null : Math.max(min, n); };
   const z = state.zones.get(id);
-  const patch = { name: v, x: num('#zoneX', 0) ?? z.x, y: num('#zoneY', 0) ?? z.y, w: num('#zoneW', 3) ?? z.w, h: num('#zoneH', 2) ?? z.h };
+  const moved = shiftZone(z, (num('#zoneX', 0) ?? z.x) - z.x, (num('#zoneY', 0) ?? z.y) - z.y);
+  const patch = { name: v, x: moved.x, y: moved.y, pts: moved.pts };
+  if (!z.pts) { patch.w = num('#zoneW', 1) ?? z.w; patch.h = num('#zoneH', 1) ?? z.h; }
   patchRec('zones', id, patch); document.activeElement?.blur(); render(true); toast('Area saved');
 }
 
@@ -2024,7 +2256,7 @@ function setQuery(v){ qEl.value = v; state.query = v; renderPlan(); if (state.ta
 function setArrange(on){
   if (state.readOnly) on = false;
   state.arrange = on; state.confirm = null;
-  if (!on) { state.multi = false; state.panelMode = null; state.tool = null; state.selectedFixture = null; if (state.sel.size > 1) state.sel = new Set(); }
+  if (!on) { state.multi = false; state.panelMode = null; state.tool = null; adraft = null; state.selectedFixture = null; state.selRoom = new Set(); if (state.sel.size > 1) state.sel = new Set(); }
   const b = $('#arrangeBtn'); b.setAttribute('aria-pressed', on); b.querySelector('span').textContent = on ? 'Done arranging' : 'Arrange desks';
   render(true);
 }
@@ -2065,6 +2297,14 @@ function autoScroll(){
 }
 planEl.addEventListener('pointerdown', e => {
   if (e.button > 0 || !state.arrange || state.readOnly || e.target.closest('[data-act]')) return;
+  if (state.tool === 'area') {
+    e.preventDefault();
+    const c = cellFromEvent(e), q = [Math.max(0, Math.round(c.x)), Math.max(0, Math.round(c.y))];
+    if (adraft) { draftClick(q); return; }
+    try { planEl.setPointerCapture(e.pointerId); } catch {}
+    drag = { kind: 'adraw', a: q, b: q, moved: false };
+    return;
+  }
   if (state.tool) {
     e.preventDefault();
     const c = cellFromEvent(e), x = Math.max(0, Math.round(c.x)), y = Math.max(0, Math.round(c.y));
@@ -2080,28 +2320,37 @@ planEl.addEventListener('pointerdown', e => {
     const id = fg.dataset.fid, f = state.fixtures.get(id); if (!f) return;
     e.preventDefault();
     try { planEl.setPointerCapture(e.pointerId); } catch {}
-    drag = { kind: fh ? 'fend' : 'fmove', end: fh?.dataset.fh, id, g: fg, f, nf: f, sx: planPx(e).x, sy: planPx(e).y, moved: false };
+    if (!fh && state.selRoom.has(id)) { startGroup(e, id); return; }
+    drag = { kind: fh ? 'fend' : 'fmove', end: fh?.dataset.fh, id, g: fg, f, nf: f, sx: planPx(e).x, sy: planPx(e).y, moved: false, additive: e.shiftKey || e.metaKey || e.ctrlKey || state.multi };
     return;
   }
-  const zh = e.target.closest('[data-zh]');
-  const zl = !zh && e.target.closest('.zlabel');
-  const el = !zh && !zl && e.target.closest('.desk');
-  if (zh || zl) {
-    const id = (zh || zl).dataset.zh || zl.dataset.zid;
-    const z = state.zones.get(id); if (!z) return;
+  // the corners and sides of the area being edited; a quick second press on the same one is a double-click
+  const zc = e.target.closest('[data-zc]'), zs = !zc && e.target.closest('[data-zs]');
+  if (zc || zs) {
+    const id = e.target.closest('g[data-zid]')?.dataset.zid, z = state.zones.get(id); if (!z) return;
     e.preventDefault();
-    try { (zh || zl).setPointerCapture(e.pointerId); } catch {}
-    drag = { kind: zh ? 'zresize' : 'zmove', id, els: [...planEl.querySelectorAll(`.zone[data-zid="${CSS.escape(id)}"], .zone-top[data-zid="${CSS.escape(id)}"]`)], sx: planPx(e).x, sy: planPx(e).y, ox: z.x, oy: z.y, ow: z.w, oh: z.h, nx: z.x, ny: z.y, nw: z.w, nh: z.h, moved: false };
+    const i = +(zc ? zc.dataset.zc : zs.dataset.zs), key = id + (zc ? 'c' : 's') + i, now = Date.now();
+    if (lastTap && lastTap.key === key && now - lastTap.t < 450) { lastTap = null; zoneDouble(z, !!zc, i, cellFromEvent(e)); return; }
+    lastTap = { key, t: now };
+    try { planEl.setPointerCapture(e.pointerId); } catch {}
+    drag = { kind: zc ? 'zcorner' : 'zside', id, i, z, P: zonePts(z), nP: null, sx: planPx(e).x, sy: planPx(e).y, moved: false };
+    return;
+  }
+  const zl = e.target.closest('.zlabel');
+  const el = !zl && e.target.closest('.desk');
+  if (zl) {
+    const id = zl.dataset.zid, z = state.zones.get(id); if (!z) return;
+    e.preventDefault();
+    try { zl.setPointerCapture(e.pointerId); } catch {}
+    if (state.selRoom.has(id)) { startGroup(e, id); return; }
+    drag = { kind: 'zmove', id, z, nz: z, sx: planPx(e).x, sy: planPx(e).y, moved: false, additive: e.shiftKey || e.metaKey || e.ctrlKey || state.multi };
     return;
   }
   if (el) {
     const id = el.dataset.id; const d = state.desks.get(id); if (!d) return;
     e.preventDefault();
     try { el.setPointerCapture(e.pointerId); } catch {}
-    const additive = e.shiftKey || e.metaKey || e.ctrlKey || state.multi;
-    const groupIds = state.sel.has(id) && state.sel.size > 1 ? [...state.sel] : [id];
-    const members = groupIds.map(mid => { const m = state.desks.get(mid); return { id: mid, el: deskEl(mid), ox: m.x, oy: m.y, shape: m.shape, rot: m.rot || 0 }; });
-    drag = { kind: 'desk', id, members, additive, sx: planPx(e).x, sy: planPx(e).y, dx: 0, dy: 0, moved: false, blocked: false, occ: occupancy(new Set(groupIds)), fx: fixtureCtx() };
+    startGroup(e, id);
     return;
   }
   // empty sheet: draw a selection box (mouse/pen only, so touch can still scroll)
@@ -2110,8 +2359,34 @@ planEl.addEventListener('pointerdown', e => {
   const c = cellFromEvent(e);
   const box = document.createElement('div'); box.className = 'marquee'; planEl.appendChild(box);
   try { planEl.setPointerCapture(e.pointerId); } catch {}
-  drag = { kind: 'box', sx: c.x, sy: c.y, ex: c.x, ey: c.y, box, additive: e.shiftKey || e.metaKey || e.ctrlKey, moved: false, base: new Set(state.sel) };
+  drag = { kind: 'box', sx: c.x, sy: c.y, ex: c.x, ey: c.y, box, additive: e.shiftKey || e.metaKey || e.ctrlKey, moved: false, base: new Set(state.sel), baseRoom: roomSel() };
 });
+// Dragging a desk, or anything in a selection, moves the whole selection: its desks, and the areas and room
+// items picked with them. Only desks can be blocked (by other desks).
+function startGroup(e, anchor){
+  const inSel = state.sel.has(anchor) || state.selRoom.has(anchor);
+  const deskIds = inSel ? [...state.sel] : [anchor], roomIds = inSel ? [...state.selRoom] : [];
+  const members = deskIds.map(mid => { const m = state.desks.get(mid); return { id: mid, el: deskEl(mid), ox: m.x, oy: m.y, shape: m.shape, rot: m.rot || 0 }; });
+  const room = roomIds.map(id => ({ id, col: roomCol(id), rec: roomRec(id), els: roomEls(id) })).filter(m => m.rec);
+  drag = { kind: 'desk', id: anchor, members, room, additive: e.shiftKey || e.metaKey || e.ctrlKey || state.multi, sx: planPx(e).x, sy: planPx(e).y, dx: 0, dy: 0, moved: false, blocked: false, occ: occupancy(new Set(deskIds)), fx: fixtureCtx() };
+}
+const roomEls = id => { const k = CSS.escape(id); return [...planEl.querySelectorAll(`.fx[data-fid="${k}"], .zfill [data-zid="${k}"], .ztop g[data-zid="${k}"], .zone-top[data-zid="${k}"]`)]; };
+function offsetEls(els, dx, dy){
+  for (const n of els) {
+    if (n instanceof SVGElement) { if (dx || dy) n.setAttribute('transform', `translate(${dx} ${dy})`); else n.removeAttribute('transform'); }
+    else n.style.transform = dx || dy ? `translate(calc(${dx} * var(--u)), calc(${dy} * var(--u)))` : '';
+  }
+}
+let lastTap = null;
+function zoneDouble(z, corner, i, c){
+  const P = zonePts(z);
+  const nP = corner ? dropCorner(P, i) : splitSide(P, i, c.x, c.y);
+  if (!nP) { toast('This side is too short to add a corner to'); return; }
+  if (!validPts(nP)) { toast("Can't square off this corner: there'd be no area left"); return; }
+  patchRec('zones', z.id, zoneShape(nP));
+  state.selectedZone = z.id; render(true);
+  toast(corner ? (straightAt(P, i) ? 'Removed the point.' : 'Squared off the corner.') : 'Added a corner. Drag either half of the side to pull it out or push it in.');
+}
 function drawPreview(g){
   for (const [k, v] of Object.entries({ x1: g.x1, y1: g.y1, x2: g.x2, y2: g.y2 })) g.line.setAttribute(k, v);
 }
@@ -2127,6 +2402,13 @@ function onPlanMove(e){
     drawPreview(drag);
     return;
   }
+  if (drag.kind === 'adraw') {
+    const c = cellFromEvent(e), a = drag.a, b = [Math.max(0, Math.round(c.x)), Math.max(0, Math.round(c.y))];
+    drag.b = b; drag.moved = b[0] !== a[0] || b[1] !== a[1];
+    const g = planEl.querySelector('.ztop .adraft');
+    if (g) g.innerHTML = drag.moved ? `<path class="apre" d="${b[0] !== a[0] && b[1] !== a[1] ? ptsPath(rectPts(a, b)) : `M${a[0]} ${a[1]}L${b[0]} ${b[1]}`}"/>` : '';
+    return;
+  }
   if (drag.kind === 'box') {
     const c = cellFromEvent(e); drag.ex = c.x; drag.ey = c.y; drag.moved = true;
     const x0 = Math.min(drag.sx, drag.ex), y0 = Math.min(drag.sy, drag.ey), x1 = Math.max(drag.sx, drag.ex), y1 = Math.max(drag.sy, drag.ey);
@@ -2135,6 +2417,13 @@ function onPlanMove(e){
     for (const d of state.desks.values()) { const s = SHAPES[d.shape]; if (d.x < x1 && d.x + s.w > x0 && d.y < y1 && d.y + s.h > y0) hit.add(d.id); }
     planEl.querySelectorAll('.desk').forEach(n => n.classList.toggle('selected', hit.has(n.dataset.id)));
     drag.hit = hit;
+    // areas and room items only when the box goes all the way round them
+    const room = new Set(drag.additive ? drag.baseRoom : []), inBox = b => b.x >= x0 && b.y >= y0 && b.x + b.w <= x1 && b.y + b.h <= y1;
+    for (const f of state.fixtures.values()) if (inBox(fixtureBox(f))) room.add(f.id);
+    for (const z of state.zones.values()) if (inBox(z)) room.add(z.id);
+    planEl.querySelectorAll('.fx').forEach(n => n.classList.toggle('picked', room.has(n.dataset.fid)));
+    planEl.querySelectorAll('.zfill [data-zid], .ztop g[data-zid]').forEach(n => n.classList.toggle('picked', room.has(n.dataset.zid)));
+    drag.hitRoom = room;
     return;
   }
   // measured on the map, so the drag stays under the pointer when the map scrolls
@@ -2154,20 +2443,29 @@ function onPlanMove(e){
       if (px === ax && py === ay) return;
       nf = normSeg({ ...f, x1: ax, y1: ay, x2: px, y2: py });
     }
-    drag.nf = nf; drag.g.innerHTML = fixtureInner(nf, true);
+    drag.nf = nf; drag.g.innerHTML = fixtureInner(nf, true, true);
     return;
   }
-  if (drag.kind === 'zmove' || drag.kind === 'zresize') {
-    const dx = Math.round(dxp / u), dy = Math.round(dyp / u);
-    if (drag.kind === 'zmove') { drag.nx = Math.max(0, drag.ox + dx); drag.ny = Math.max(0, drag.oy + dy); for (const el of drag.els) { el.style.setProperty('--x', drag.nx); el.style.setProperty('--y', drag.ny); } }
-    else { drag.nw = Math.max(3, drag.ow + dx); drag.nh = Math.max(2, drag.oh + dy); for (const el of drag.els) { el.style.setProperty('--w', drag.nw); el.style.setProperty('--h', drag.nh); } }
+  if (drag.kind === 'zmove') {
+    const z = drag.z, nz = shiftZone(z, Math.max(Math.round(dxp / u), -z.x), Math.max(Math.round(dyp / u), -z.y));
+    drag.nz = nz; zonePreview(nz);
+    return;
+  }
+  if (drag.kind === 'zcorner' || drag.kind === 'zside') {
+    const dx = Math.round(dxp / u), dy = Math.round(dyp / u), P = drag.P, i = drag.i;
+    let nP, keep = false;
+    if (drag.kind === 'zcorner') { keep = straightAt(P, i); nP = moveCorner(P, i, Math.max(0, P[i][0] + dx), Math.max(0, P[i][1] + dy)); }
+    else { const a = P[i], h = a[1] === P[(i + 1) % P.length][1]; nP = shiftSide(P, i, h ? Math.max(dy, -a[1]) : Math.max(dx, -a[0])); }
+    nP = cleanPts(nP, keep);
+    if (!validPts(nP)) return; // sides would cross: stay at the last shape that worked
+    drag.nP = nP; zonePreview({ ...drag.z, ...zoneShape(nP) });
     return;
   }
   // desk(s)
   let dx = Math.round(dxp / u), dy = Math.round(dyp / u);
-  const minX = Math.min(...drag.members.map(m => m.ox)), minY = Math.min(...drag.members.map(m => m.oy));
+  const minX = Math.min(...drag.members.map(m => m.ox), ...drag.room.map(m => roomBox(m.rec).x)), minY = Math.min(...drag.members.map(m => m.oy), ...drag.room.map(m => roomBox(m.rec).y));
   dx = Math.max(dx, -minX); dy = Math.max(dy, -minY);
-  if (dx === drag.dx && dy === drag.dy && drag.members[0].el?.classList.contains('dragging')) return;
+  if (dx === drag.dx && dy === drag.dy && drag.members[0]?.el?.classList.contains('dragging')) return;
   drag.dx = dx; drag.dy = dy;
   let blocked = false;
   for (const m of drag.members) {
@@ -2180,6 +2478,7 @@ function onPlanMove(e){
     m.el.classList.toggle('conflict', !blocked && issuesOf(cellsOf(m.shape, m.rot, m.ox + dx, m.oy + dy), drag.fx).length > 0);
     m.el.style.setProperty('--x', m.ox + dx); m.el.style.setProperty('--y', m.oy + dy);
   }
+  for (const m of drag.room) offsetEls(m.els, dx, dy);
   // grow the sheet while dragging toward its edge
   const maxR = Math.max(...drag.members.map(m => m.ox + dx + SHAPES[m.shape].w)) + 8;
   const maxB = Math.max(...drag.members.map(m => m.oy + dy + SHAPES[m.shape].h)) + 8;
@@ -2193,10 +2492,22 @@ function endDrag(cancelled){
   const flush = () => { if (needsRenderAfterDrag) { needsRenderAfterDrag = false; render(); } };
   if (g.kind === 'box') {
     g.box.remove();
-    if (!g.moved) { if (!g.additive) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; if (!state.editing && !state.panelMode) state.tab = 'desk'; render(true); } flush(); return; }
+    if (!g.moved) { if (!g.additive) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.selectedPerson = null; state.confirm = null; if (!state.editing && !state.panelMode) state.tab = 'desk'; render(true); } flush(); return; }
     needsRenderAfterDrag = false;
-    selectSet(g.hit || g.base);
-    if ((g.hit || new Set()).size > 1) toast(`Selected ${g.hit.size} desks. Drag any of them to move the group.`);
+    const ds = g.hit || g.base, rs = g.hitRoom || g.baseRoom;
+    selectMixed(ds, rs);
+    if (ds.size + rs.size > 1) toast(`Selected ${whatOf(ds.size, rs)}. Drag any of them to move the group.`);
+    return;
+  }
+  if (g.kind === 'adraw') {
+    needsRenderAfterDrag = false;
+    if (cancelled) { drawDraft(); return; }
+    const a = g.a, b = g.b;
+    if (a[0] !== b[0] && a[1] !== b[1]) { addZone(rectPts(a, b)); return; }
+    // a click, or a drag along one grid line, starts an outline drawn corner by corner
+    adraft = { pts: g.moved ? [a, b] : [a], hover: null };
+    drawDraft();
+    toast('Now click the next corner. Click the first corner again, or press Enter, to finish. Backspace undoes a corner.');
     return;
   }
   if (g.kind === 'draw') {
@@ -2215,6 +2526,7 @@ function endDrag(cancelled){
   }
   if (g.kind === 'fmove' || g.kind === 'fend') {
     needsRenderAfterDrag = false;
+    if (!g.moved && g.additive && !cancelled) { toggleRoom(g.id); return; }
     const changed = g.moved && !cancelled && g.nf !== g.f;
     if (changed) patchRec('fixtures', g.id, g.nf);
     state.selectedFixture = g.id; state.sel = new Set(); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.panelMode = null; state.editing = null;
@@ -2222,28 +2534,36 @@ function endDrag(cancelled){
     if (changed) { const n = inWayNote(g.nf); if (n) toast(n.trim()); }
     return;
   }
-  if (g.kind === 'zmove' || g.kind === 'zresize') {
+  if (g.kind === 'zmove' || g.kind === 'zcorner' || g.kind === 'zside') {
     needsRenderAfterDrag = false;
-    if (!g.moved || cancelled) { state.selectedZone = g.id; state.selectedFixture = null; state.sel = new Set(); state.tab = 'desk'; state.confirm = null; state.panelMode = null; render(true); return; }
-    patchRec('zones', g.id, g.kind === 'zmove' ? { x: g.nx, y: g.ny } : { w: g.nw, h: g.nh });
-    state.selectedZone = g.id; state.selectedFixture = null; state.sel = new Set(); render(true);
+    if (!g.moved && g.additive && !cancelled && g.kind === 'zmove') { toggleRoom(g.id); return; }
+    if (g.moved) lastTap = null; // only two presses without a drag make a double-click
+    if (g.moved && !cancelled) {
+      if (g.kind === 'zmove' && g.nz !== g.z) patchRec('zones', g.id, { x: g.nz.x, y: g.nz.y, pts: g.nz.pts });
+      else if (g.kind !== 'zmove' && g.nP) patchRec('zones', g.id, zoneShape(g.nP));
+    }
+    state.selectedZone = g.id; state.selectedFixture = null; state.selRoom = new Set(); state.sel = new Set(); state.tab = 'desk'; state.confirm = null; state.panelMode = null;
+    render(true);
     return;
   }
   for (const m of g.members) m.el?.classList.remove('dragging', 'blocked');
   if (!g.moved) {
     needsRenderAfterDrag = false;
-    if (g.additive) toggleInSelection(g.id); else selectDesk(g.id);
+    if (!state.desks.has(g.id)) { if (g.additive) toggleRoom(g.id); else selectMixed([], [g.id]); }
+    else if (g.additive) toggleInSelection(g.id); else selectDesk(g.id);
     return;
   }
   if (g.blocked || cancelled) {
     for (const m of g.members) if (m.el) { m.el.style.setProperty('--x', m.ox); m.el.style.setProperty('--y', m.oy); }
+    for (const m of g.room) offsetEls(m.els, 0, 0);
     if (!cancelled) toast('That spot overlaps another desk');
     needsRenderAfterDrag = false; render(); // puts back the warnings the drag preview changed
     return;
   }
   needsRenderAfterDrag = false;
-  if (g.members.length === 1) state.sel = new Set([g.id]);
+  if (g.members.length === 1 && !g.room.length) { state.sel = new Set([g.id]); state.selRoom = new Set(); state.selectedZone = null; state.selectedFixture = null; }
   if (g.dx || g.dy) for (const m of g.members) patchRec('desks', m.id, { x: m.ox + g.dx, y: m.oy + g.dy });
+  if (g.dx || g.dy) for (const m of g.room) patchRec(m.col, m.id, shiftRoom(m.rec, g.dx, g.dy));
   render(true);
   const note = g.dx || g.dy ? clashNote(g.members.map(m => m.id)) : '';
   if (note) toast(note.trim());
@@ -2315,8 +2635,8 @@ planEl.addEventListener('click', e => {
   const zl = e.target.closest('.zlabel');
   const el = e.target.closest('.desk');
   if (el) selectDesk(el.dataset.id, { scrollPanel: true });
-  else if (zl) { state.selectedZone = zl.dataset.zid; state.selectedFixture = null; state.sel = new Set(); state.tab = 'desk'; render(true); }
-  else if (!state.editing && !state.panelMode) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; state.tab = 'desk'; render(true); }
+  else if (zl) { state.selectedZone = zl.dataset.zid; state.selectedFixture = null; state.selRoom = new Set(); state.sel = new Set(); state.tab = 'desk'; render(true); }
+  else if (!state.editing && !state.panelMode) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.selectedPerson = null; state.confirm = null; state.tab = 'desk'; render(true); }
 });
 planEl.addEventListener('keydown', e => {
   const el = e.target.closest('.desk'); if (!el) return;
@@ -2343,15 +2663,36 @@ document.addEventListener('keydown', e => {
   if (!$('#importOverlay').hidden) { closeImport(); return; }
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
   if (state.editing || state.panelMode) return;
-  if (state.tool) { if (drag && drag.kind === 'draw') endDrag(true); setTool(null); return; }
-  if (state.sel.size || state.selectedZone || state.selectedFixture) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.confirm = null; render(true); }
+  if (state.tool) {
+    if (drag && (drag.kind === 'draw' || drag.kind === 'adraw')) endDrag(true);
+    if (adraft) { adraft = null; drawDraft(); toast('Area cancelled. Draw another, or press Esc again to stop.'); return; }
+    setTool(null); return;
+  }
+  if (anySel()) { state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.confirm = null; render(true); }
 });
 planEl.addEventListener('pointermove', e => { pointerCell = cellFromEvent(e); });
+// while drawing an area corner by corner, the next side follows the pointer
+planEl.addEventListener('pointermove', e => {
+  if (!adraft || drag) return;
+  const c = cellFromEvent(e), l = adraft.pts[adraft.pts.length - 1], q = [Math.max(0, Math.round(c.x)), Math.max(0, Math.round(c.y))];
+  const h = Math.abs(q[0] - l[0]) >= Math.abs(q[1] - l[1]) ? [q[0], l[1]] : [l[0], q[1]];
+  if (adraft.hover && adraft.hover[0] === h[0] && adraft.hover[1] === h[1]) return;
+  adraft.hover = h; drawDraft();
+});
+// Enter finishes the area being drawn, Backspace takes back its last corner
+document.addEventListener('keydown', e => {
+  if (!adraft || (e.key !== 'Enter' && e.key !== 'Backspace')) return;
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  e.preventDefault();
+  if (e.key === 'Enter') { finishDraft(); return; }
+  adraft.pts.pop(); if (!adraft.pts.length) adraft = null;
+  drawDraft();
+});
 planEl.addEventListener('pointerleave', () => { pointerCell = null; });
 // R rotates the selection (a focused desk handles its own R above)
 document.addEventListener('keydown', e => {
   if ((e.key !== 'r' && e.key !== 'R') || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (!state.arrange || state.readOnly || !state.sel.size || drag || placing || e.target.closest?.('.desk')) return;
+  if (!state.arrange || state.readOnly || !state.sel.size || state.selRoom.size || drag || placing || e.target.closest?.('.desk')) return;
   if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
   const a = document.activeElement;
   if (/INPUT|TEXTAREA|SELECT/.test(a?.tagName || '') || a?.isContentEditable) return;
@@ -2377,37 +2718,37 @@ document.addEventListener('keydown', e => {
   if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
   const a = document.activeElement;
   if (/INPUT|TEXTAREA|SELECT/.test(a?.tagName || '') || a?.isContentEditable) return;
-  if (k === 'c') { if (!state.sel.size || String(getSelection())) return; e.preventDefault(); copySelection(); }
+  if (k === 'c') { if (!anySel() || String(getSelection())) return; e.preventDefault(); copySelection(); }
   else if (k === 'v') { e.preventDefault(); pasteClipboard(); }
-  else if (state.sel.size) { e.preventDefault(); duplicateSelection(); }
+  else if (anySel()) { e.preventDefault(); duplicateSelection(); }
 });
 // Delete / Supr (or Backspace) removes the selected desks or area while arranging.
 // An area or one free desk goes straight away (an area's desks stay put); several desks, or anyone seated,
 // asks first and a second press confirms.
 document.addEventListener('keydown', e => {
   if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-  if (!state.arrange || state.readOnly || (!state.sel.size && !state.selectedZone && !state.selectedFixture) || drag || placing) return;
+  if (!state.arrange || state.readOnly || !anySel() || drag || placing || adraft) return;
   if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
   const a = document.activeElement;
   if (/INPUT|TEXTAREA|SELECT/.test(a?.tagName || '') || a?.isContentEditable) return;
   e.preventDefault();
-  if (!state.sel.size) { if (state.selectedFixture) deleteFixture(); else deleteSelectedZone(); return; }
+  if (!state.sel.size) { if (state.selRoom.size) deleteSelection(); else if (state.selectedFixture) deleteFixture(); else deleteSelectedZone(); return; }
   const seated = [...state.sel].some(id => { const d = state.desks.get(id); return d && d.personId && state.people.has(d.personId); });
   if (state.confirm === 'deleteDesk' || (state.sel.size === 1 && !seated)) { deleteSelection(); return; }
   state.confirm = 'deleteDesk'; renderPanel(true);
   $('[data-act="deleteSelYes"]')?.focus();
-  toast(`Press ${e.key === 'Backspace' ? 'Backspace' : 'Delete'} again to delete ${state.sel.size === 1 ? 'this desk' : `these ${state.sel.size} desks`}`);
+  toast(`Press ${e.key === 'Backspace' ? 'Backspace' : 'Delete'} again to delete ${state.selRoom.size ? whatOf(state.sel.size, state.selRoom) : state.sel.size === 1 ? 'this desk' : `these ${state.sel.size} desks`}`);
 });
 
-// arrow keys nudge the selected wall, door, window or pillar
+// arrow keys nudge the selected wall, door, window, pillar or area, or a selection with any of them in it
 document.addEventListener('keydown', e => {
   const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-  if (!moves[e.key] || !state.arrange || !state.selectedFixture || drag || placing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!moves[e.key] || !state.arrange || !(state.selectedFixture || state.selectedZone || state.selRoom.size) || drag || placing || e.ctrlKey || e.metaKey || e.altKey) return;
   if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
   const a = document.activeElement;
   if (/INPUT|TEXTAREA|SELECT|BUTTON/.test(a?.tagName || '') || a?.isContentEditable || a?.closest?.('.desk')) return;
   e.preventDefault();
-  nudgeFixture(...moves[e.key]);
+  if (state.selectedFixture) nudgeFixture(...moves[e.key]); else moveSelection(...moves[e.key]);
 });
 
 /* drag a person from the side panel onto a desk on the map to seat them there */
@@ -2757,7 +3098,11 @@ function planAll(found){
       const name = m.area ? String(r[m.area] ?? '').trim() || `Area ${i + 1}` : `Area ${i + 1}`;
       const ex = byName.get(norm(name));
       ex ? updated++ : created++;
-      items.push({ id: ex ? ex.id : uid('z'), data: { name, x: Math.max(0, x), y: Math.max(0, y), w, h } });
+      // a Shape cell lists the corners as "x y" pairs; one that doesn't make a valid outline leaves the plain rectangle
+      const nums = m.shape ? String(r[m.shape] ?? '').match(/-?\d+/g) || [] : [];
+      const P = nums.length >= 8 && nums.length % 2 === 0 ? cleanPts(nums.reduce((a, v, j) => (j % 2 ? a[a.length - 1].push(+v) : a.push([+v]), a), []), false) : null;
+      const shape = P && validPts(P) ? zoneShape(P) : null;
+      items.push({ id: ex ? ex.id : uid('z'), data: shape ? { name, ...shape } : { name, x: Math.max(0, x), y: Math.max(0, y), w, h } });
     });
     plan.areas = { sheet: found.areas.sheet, items, created, updated };
   }
@@ -2815,7 +3160,7 @@ function runImport(){
     done.push(`${P.layout.items.length} desks`);
   }
   if (P.areas) {
-    for (const it of P.areas.items) setRec('zones', { id: it.id, ...it.data });
+    for (const it of P.areas.items) { const z = { id: it.id, ...it.data }; if (!z.pts) delete z.pts; setRec('zones', z); }
     done.push(`${P.areas.items.length} areas`);
   }
   if (P.fixtures) {
@@ -2867,7 +3212,7 @@ function runImport(){
   }
   // a layout sheet may have just added desks that people from an earlier import were waiting for
   const waited = seatWaiting();
-  closeImport(); state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null;
+  closeImport(); state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.selectedPerson = null;
   render(true);
   requestAnimationFrame(() => requestAnimationFrame(fitToScreen));
   toast(`Imported ${done.join(', ')}.` + waitNote(waited));
@@ -2893,7 +3238,7 @@ async function exportXlsx(){
       const p = d.personId ? state.people.get(d.personId) : null;
       return { 'Desk': d.number, 'Shape': SHAPES[d.shape]?.label || d.shape, 'Column': d.x, 'Row': d.y, 'Rotation': d.rot || 0, 'Seated': p ? p.name : '', 'Seated team': p ? (p.team || '') : '' };
     });
-    const areaRows = [...state.zones.values()].map(z => ({ 'Area': z.name, 'Column': z.x, 'Row': z.y, 'Width': z.w, 'Height': z.h }));
+    const areaRows = [...state.zones.values()].map(z => ({ 'Area': z.name, 'Column': z.x, 'Row': z.y, 'Width': z.w, 'Height': z.h, 'Shape': z.pts?.length ? z.pts.map(q => q.join(' ')).join(', ') : '' }));
     const roomRows = fixturesSorted().map(f => { const b = fixtureBox(f); return { 'Item': FIX[f.kind], 'Column': b.x, 'Row': b.y, 'Width': b.w, 'Height': b.h, 'Door swing': f.kind === 'door' ? f.swing || 0 : '' }; });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, peopleRows.length ? XLSX.utils.json_to_sheet(peopleRows) : XLSX.utils.aoa_to_sheet([fields().map(f => f.label).concat('Desk')]), 'People');
@@ -2995,7 +3340,7 @@ function tint(hex, amount){
   const n = parseInt(hex, 16);
   return [16, 8, 0].map(sh => Math.round(((n >> sh) & 255) * amount + 255 * (1 - amount)).toString(16).padStart(2, '0')).join('');
 }
-function zoneOf(d){ return [...state.zones.values()].find(z => d.x >= z.x && d.y >= z.y && d.x < z.x + z.w && d.y < z.y + z.h); }
+function zoneOf(d){ return [...state.zones.values()].find(z => inZone(z, d.x, d.y)); }
 function planSVG(names){
   const S = 24, PAD = 16, HEAD = 60;
   const FONT = "Barlow, 'Segoe UI', Arial, sans-serif", MONO = "'JetBrains Mono', Consolas, monospace";
@@ -3018,7 +3363,7 @@ function planSVG(names){
     `<rect width="${W}" height="${H}" fill="#ffffff"/>`,
     `<text x="${PAD}" y="30" font-size="20" font-weight="700" fill="#${INK_HEX}">Office Desk Map</text>`,
     `<text x="${PAD}" y="48" font-size="12" fill="#${MUTED_HEX}">${esc(new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }))} · ${ds.length} desks · ${seated} seated · ${ds.length - seated} free</text>`];
-  for (const z of zs) out.push(`<rect x="${ox + z.x * S}" y="${oy + z.y * S}" width="${z.w * S}" height="${z.h * S}" rx="6" fill="#${tint(ACCENT_HEX, .06)}" stroke="#${tint(ACCENT_HEX, .45)}" stroke-width="1.5" stroke-dasharray="6 4"/>`);
+  for (const z of zs) out.push(`<path d="${ptsPath(zonePts(z).map(q => [ox + q[0] * S, oy + q[1] * S]))}" fill="#${tint(ACCENT_HEX, .06)}" stroke="#${tint(ACCENT_HEX, .45)}" stroke-width="1.5" stroke-dasharray="6 4" stroke-linejoin="round"/>`);
   const r2 = v => Math.round(v * 100) / 100;
   for (const d of ds) {
     const sh = SHAPES[d.shape] || SHAPES.h, rot = d.rot || 0, x = ox + d.x * S, y = oy + d.y * S;
@@ -3162,8 +3507,10 @@ function buildPlanXlsx(names){
   const deskSquares = new Set(ds.flatMap(d => cellsOf(d.shape, d.rot || 0, d.x, d.y)));
   const zoneFill = tint(ACCENT_HEX, .08), zoneStyle = st.style({ fill: zoneFill });
   for (const z of zs) {
-    for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + y)) put(R(y), C(x), { s: edgeLines.has(x + ',' + y) ? st.style({ fill: zoneFill, border: wb(x, y) }) : zoneStyle });
-    for (let x = z.x; x < z.x + z.w; x++) if (!deskSquares.has(x + ',' + z.y)) { put(R(z.y), C(x), { s: st.style({ fill: zoneFill, border: wb(x, z.y), font: { b: 1, sz: 8, color: ACCENT_HEX } }), v: txt((z.name || 'Area').toUpperCase()) }); break; }
+    const cells = zoneCells(z).filter(([x, y]) => !deskSquares.has(x + ',' + y));
+    for (const [x, y] of cells) put(R(y), C(x), { s: edgeLines.has(x + ',' + y) ? st.style({ fill: zoneFill, border: wb(x, y) }) : zoneStyle });
+    const top = cells.reduce((a, c) => !a || c[1] < a[1] || (c[1] === a[1] && c[0] < a[0]) ? c : a, null);
+    if (top) put(R(top[1]), C(top[0]), { s: st.style({ fill: zoneFill, border: wb(top[0], top[1]), font: { b: 1, sz: 8, color: ACCENT_HEX } }), v: txt((z.name || 'Area').toUpperCase()) });
   }
   // pillars: dark squares, under the desks so a desk drawn on one still shows its number
   const pillarFill = tint(INK_HEX, .45);
@@ -3301,8 +3648,9 @@ function buildDXF(desks, zones, people, opts, fixtures = []){
   }
 
   for (const z of zones) {
-    poly('AREAS', [P(z.x, z.y), P(z.x + z.w, z.y), P(z.x + z.w, z.y + z.h), P(z.x, z.y + z.h)]);
-    text('AREA-NAMES', P(z.x + 0.4, z.y + 0.4), 0.6 * S, z.name || 'Area', 0, 0, 3);
+    poly('AREAS', zonePts(z).map(q => P(q[0], q[1])));
+    const a = zoneAnchor(z);
+    text('AREA-NAMES', P(a.x + 0.4, a.y + 0.4), 0.6 * S, z.name || 'Area', 0, 0, 3);
   }
 
   for (const d of desks) {
@@ -3391,7 +3739,7 @@ function applySnapshot(d){
   const m = arr => new Map((arr || []).filter(r => r && r.id != null).map(r => [String(r.id), { ...r, id: String(r.id) }]));
   state.desks = m(d.desks); state.people = m(d.people); state.zones = m(d.zones); state.fixtures = m(d.fixtures); state.settings = m(d.settings);
   clearHistory(); // undoing back into a different map would be confusing
-  state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selectedPerson = null; state.confirm = null; state.didFit = false; state.fieldsDraft = null; if (state.panelMode === 'fields') state.panelMode = null;
+  state.sel = new Set(); state.selectedZone = null; state.selectedFixture = null; state.selRoom = new Set(); state.selectedPerson = null; state.confirm = null; state.didFit = false; state.fieldsDraft = null; if (state.panelMode === 'fields') state.panelMode = null;
 }
 function lsGet(k){ try { return localStorage.getItem(k); } catch { store.lsOk = false; return null; } }
 function lsSet(k, v){ try { localStorage.setItem(k, v); store.lsOk = true; return true; } catch { store.lsOk = false; return false; } }

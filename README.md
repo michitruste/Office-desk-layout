@@ -46,6 +46,17 @@ These can't write to files directly. The map saves in the browser instead, and t
 - They never stop you from placing a desk. A desk that sits on a pillar, crosses a wall or stands where a door swings gets an orange outline and a **!** badge, and the header counts them. Desks added with a click, a row or a paste avoid those spots by themselves.
 - They show up in every export. In the Excel data workbook they're on the **Room** sheet (a wall across has a Height of 0); importing a workbook with that sheet replaces the room on the map.
 
+## Areas
+
+- In Arrange mode, click **Area**, then drag from one corner to the opposite one for a rectangle. For any other shape (an L, a U), click corner by corner along the grid lines and click the first corner again, or press **Enter**, to finish. **Backspace** takes back the last corner and **Esc** cancels.
+- To change an area, click its name. Drag a round corner or the handle in the middle of a side. Double-click a side to add a corner there, then drag one half of the side out or in. Double-click a corner to square it off. **Make it a rectangle** in the side panel undoes any shape.
+- In the Excel data workbook, a shaped area lists its corners in the **Shape** column of the Areas sheet, as `column row` pairs.
+
+## Selecting, moving and copying several things
+
+- Drag a box on an empty part of the map to select everything in it: the desks it touches, and the areas, walls, doors, windows and pillars it goes all the way round. **Shift+click** adds or removes single items.
+- Drag any of them, or use the arrow keys, to move them all together. **Ctrl+C** / **Ctrl+V** copy and paste the whole selection where your mouse is, **Ctrl+D** duplicates it, and **Delete** removes it. Pasted desks get new numbers and pasted areas get "copy" added to their name.
+
 ## Good to know
 
 - **Internet:** Excel import and export load a spreadsheet library from the internet, so they need a connection. Everything else, including the CAD (.dxf) export and JSON backups, works offline.
