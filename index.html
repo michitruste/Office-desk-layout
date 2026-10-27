@@ -98,7 +98,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .zoom button:hover{background:var(--accent-soft)}
 .zoom span{font-family:var(--f-mono);font-size:12px;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
 
-.scroll{flex:1;min-height:0;overflow:auto;position:relative;overscroll-behavior:contain}
+.scroll{flex:1;min-height:0;overflow:auto;position:relative;overscroll-behavior:contain;
+  /* a sheet narrower than the map area sits in the middle; "safe" keeps a wider one scrollable from its left edge */
+  display:grid;justify-content:safe center;align-content:start}
 .plan{position:relative;--u:22px;margin:calc(var(--u)*.5);
   background-color:var(--sheet);
   background-image:
@@ -524,10 +526,17 @@ function collides(id, shape, rot, x, y, occ){
   return cellsOf(shape, rot, x, y).some(c => occ.has(c));
 }
 function extent(){
-  let maxX = 0, maxY = 0;
-  for (const d of state.desks.values()) { const s = SHAPES[d.shape] || SHAPES.h; maxX = Math.max(maxX, d.x + s.w); maxY = Math.max(maxY, d.y + s.h); }
-  for (const z of state.zones.values()) { maxX = Math.max(maxX, z.x + z.w); maxY = Math.max(maxY, z.y + z.h); }
-  return { maxX, maxY };
+  let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+  for (const d of state.desks.values()) { const s = SHAPES[d.shape] || SHAPES.h; minX = Math.min(minX, d.x); minY = Math.min(minY, d.y); maxX = Math.max(maxX, d.x + s.w); maxY = Math.max(maxY, d.y + s.h); }
+  for (const z of state.zones.values()) { minX = Math.min(minX, z.x); minY = Math.min(minY, z.y); maxX = Math.max(maxX, z.x + z.w); maxY = Math.max(maxY, z.y + z.h); }
+  return { minX: isFinite(minX) ? minX : 0, minY: isFinite(minY) ? minY : 0, maxX, maxY };
+}
+// Size of the drawing sheet in squares. When viewing, it hugs the layout with the same margin on both sides
+// so the map can sit centred; when arranging (or empty) it leaves room to add more.
+function sheetSize(arranging){
+  const { minX, minY, maxX, maxY } = extent();
+  if (!maxX || arranging) return { cols: Math.max(36, maxX + 4) + (arranging ? 6 : 0), rows: Math.max(22, maxY + 4) + (arranging ? 6 : 0) };
+  return { cols: maxX + Math.max(2, minX), rows: maxY + Math.max(2, minY) };
 }
 // first top-left spot where a w×h box (plus a 1-square margin) is empty
 function findBox(w, h){
@@ -838,9 +847,7 @@ function renderPlan(){
   planEl.classList.toggle('tiny', state.zoom < 0.45);
   planEl.classList.toggle('small', state.zoom >= 0.45 && state.zoom < 0.7);
   const ds = desksArr();
-  const { maxX, maxY } = extent();
-  let cols = Math.max(36, maxX + 4), rows = Math.max(22, maxY + 4);
-  if (state.arrange) { cols += 6; rows += 6; }
+  const { cols, rows } = sheetSize(state.arrange);
   planEl.style.width = `calc(${cols} * var(--u))`;
   planEl.style.height = `calc(${rows} * var(--u))`;
   planEl.dataset.cols = cols; planEl.dataset.rows = rows;
@@ -1522,28 +1529,63 @@ async function copyText(v, btn){
 
 /* zoom */
 const narrow = () => window.matchMedia('(max-width: 880px)').matches;
-function setZoom(z){
-  const sc = $('#scroll');
-  const old = state.zoom;
-  z = clamp(z, 0.2, 1.75);
-  const cx = sc.scrollLeft + sc.clientWidth / 2, cy = sc.scrollTop + sc.clientHeight / 2;
+// everything on the sheet is sized in --u, so zooming only needs the new unit, not a re-render
+function applyZoom(z){
   state.zoom = z;
-  renderTools(); renderPlan();
-  const r = z / old;
-  sc.scrollLeft = cx * r - sc.clientWidth / 2;
-  if (!narrow()) sc.scrollTop = cy * r - sc.clientHeight / 2;
+  planEl.style.setProperty('--u', (U_BASE * z) + 'px');
+  planEl.classList.toggle('tiny', z < 0.45);
+  planEl.classList.toggle('small', z >= 0.45 && z < 0.7);
+  const lab = $('#tools .zoom span'); if (lab) lab.textContent = Math.round(z * 100) + '%';
+}
+// zooms keeping the map point under `at` (screen coordinates) in place; by default the middle of the visible map
+function setZoom(z, at){
+  const sc = $('#scroll'), r = sc.getBoundingClientRect();
+  z = clamp(z, 0.2, 1.75);
+  if (Math.abs(z - state.zoom) < 1e-4) return;
+  const ax = at ? at.x : r.left + sc.clientWidth / 2, ay = at ? at.y : r.top + sc.clientHeight / 2;
+  const before = planEl.getBoundingClientRect(), oldU = U_BASE * state.zoom;
+  const px = (ax - before.left) / oldU, py = (ay - before.top) / oldU;
+  applyZoom(z);
+  const after = planEl.getBoundingClientRect(), u = U_BASE * z;
+  sc.scrollLeft += after.left + px * u - ax;
+  const dy = after.top + py * u - ay;
+  // on phones the page scrolls instead of the map
+  if (!narrow()) sc.scrollTop += dy; else if (at) window.scrollBy(0, dy);
 }
 function fitToScreen(){
   const sc = $('#scroll');
-  const { maxX, maxY } = extent();
+  const { maxX } = extent();
   if (!maxX) { setZoom(1); return; }
-  // on phones the map grows down the page, so only its width needs to fit
-  const zW = (sc.clientWidth - 24) / ((maxX + 2) * U_BASE);
-  const z = narrow() ? zW : Math.min(zW, (sc.clientHeight - 24) / ((maxY + 2) * U_BASE));
+  const { cols, rows } = sheetSize(false);
+  // the sheet plus its half-square margin on each side; on phones the map grows down the page, so only its width needs to fit
+  const zW = (sc.clientWidth - 8) / ((cols + 1) * U_BASE);
+  const z = narrow() ? zW : Math.min(zW, (sc.clientHeight - 8) / ((rows + 1) * U_BASE));
   state.zoom = clamp(Math.floor(z * 100) / 100, 0.2, 1.5);
   renderTools(); renderPlan();
   sc.scrollTo({ left: 0, top: 0 });
 }
+
+// With the pointer over the map, Ctrl + wheel (a trackpad pinch arrives the same way) and Ctrl + / − / 0
+// zoom the map around the pointer instead of the whole page. Elsewhere the browser zooms as usual.
+let mapPointer = null;
+const scrollEl = $('#scroll');
+scrollEl.addEventListener('pointermove', e => { mapPointer = { x: e.clientX, y: e.clientY }; });
+scrollEl.addEventListener('pointerleave', () => { mapPointer = null; });
+const zoomBusy = () => drag || placing || (pdrag && pdrag.moved);
+scrollEl.addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  if (zoomBusy()) return;
+  const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+  setZoom(state.zoom * Math.exp(-dy * 0.002), { x: e.clientX, y: e.clientY });
+}, { passive: false });
+document.addEventListener('keydown', e => {
+  if (!mapPointer || !(e.ctrlKey || e.metaKey) || e.altKey || zoomBusy() || !$('#importOverlay').hidden) return;
+  const k = e.key;
+  if (k === '+' || k === '=') { e.preventDefault(); setZoom(ZOOMS.find(z => z > state.zoom + 0.001) ?? ZOOMS[ZOOMS.length - 1], mapPointer); }
+  else if (k === '-' || k === '_') { e.preventDefault(); setZoom([...ZOOMS].reverse().find(z => z < state.zoom - 0.001) ?? ZOOMS[0], mapPointer); }
+  else if (k === '0') { e.preventDefault(); fitToScreen(); }
+});
 
 let toastTimer;
 function toast(msg){
