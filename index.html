@@ -881,7 +881,7 @@ function zonePanelHTML(){
         <div class="stack"><label class="l" for="zoneH">Height</label><input class="input mono" id="zoneH" type="number" min="2" value="${z.h}"></div>
       </div>
       <div><button class="btn small primary" data-act="saveZone">Save area</button></div>
-      <span class="sm muted">On the map, drag the area's name to move it and the round handle in its corner to resize it. Both stay on top of desks. Moving an area doesn't move the desks in it.</span>
+      <span class="sm muted">On the map, drag the area's name to move it and the round handle in its corner to resize it. Both stay on top of desks. Moving an area doesn't move the desks in it. Press Delete to remove the area; its desks stay.</span>
       <div class="row2"><button class="btn small" data-act="selectInZone">Select the desks inside</button></div>
       ${state.confirm === 'deleteZone'
         ? `<div class="confirm"><span>Delete the area “${esc(z.name)}”? The desks inside stay where they are.</span><div class="row2"><button class="btn small danger solid" data-act="deleteZoneYes">Delete area</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
@@ -1202,6 +1202,11 @@ function deleteSelection(){
   state.sel = new Set(); state.confirm = null; render(true);
   toast(one ? `Deleted desk ${one}` : `Deleted ${n} desks`);
 }
+function deleteSelectedZone(){
+  const z = state.zones.get(state.selectedZone);
+  delRec('zones', state.selectedZone); state.selectedZone = null; state.confirm = null; render(true);
+  toast(`Deleted area ${z?.name || ''}`.trim());
+}
 function addArea(fromSelection){
   let z;
   if (fromSelection && state.sel.size) {
@@ -1325,7 +1330,7 @@ document.addEventListener('click', e => {
       selectSet(inside); toast(`Selected ${inside.length} desks in ${z.name || 'this area'}`); break;
     }
     case 'deleteZone': state.confirm = 'deleteZone'; renderPanel(true); break;
-    case 'deleteZoneYes': { const z = state.zones.get(state.selectedZone); delRec('zones', state.selectedZone); state.selectedZone = null; state.confirm = null; render(true); toast(`Deleted area ${z?.name || ''}`.trim()); break; }
+    case 'deleteZoneYes': deleteSelectedZone(); break;
     case 'backToList': state.selectedPerson = null; state.confirm = null; renderPanel(true); break;
     case 'showDesk': selectDesk(b.dataset.id, { scrollMap: true }); break;
     case 'unseat': seat(b.dataset.id, null); break;
@@ -1641,15 +1646,17 @@ document.addEventListener('keydown', e => {
   if (state.editing || state.panelMode) return;
   if (state.sel.size || state.selectedZone) { state.sel = new Set(); state.selectedZone = null; state.confirm = null; render(true); }
 });
-// Delete / Supr (or Backspace) removes the selected desks while arranging.
-// One free desk goes straight away; several desks, or anyone seated, asks first and a second press confirms.
+// Delete / Supr (or Backspace) removes the selected desks or area while arranging.
+// An area or one free desk goes straight away (an area's desks stay put); several desks, or anyone seated,
+// asks first and a second press confirms.
 document.addEventListener('keydown', e => {
   if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-  if (!state.arrange || state.readOnly || !state.sel.size || drag || placing) return;
+  if (!state.arrange || state.readOnly || (!state.sel.size && !state.selectedZone) || drag || placing) return;
   if (!$('#importOverlay').hidden || state.editing || state.panelMode) return;
   const a = document.activeElement;
   if (/INPUT|TEXTAREA|SELECT/.test(a?.tagName || '') || a?.isContentEditable) return;
   e.preventDefault();
+  if (!state.sel.size) { deleteSelectedZone(); return; }
   const seated = [...state.sel].some(id => { const d = state.desks.get(id); return d && d.personId && state.people.has(d.personId); });
   if (state.confirm === 'deleteDesk' || (state.sel.size === 1 && !seated)) { deleteSelection(); return; }
   state.confirm = 'deleteDesk'; renderPanel(true);
