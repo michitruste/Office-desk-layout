@@ -902,7 +902,7 @@ function deskPanelHTML(){
       <div class="row2"><button class="btn small" data-act="rotate">${ICON.rotate}Rotate</button><button class="btn small" data-act="duplicate" title="Ctrl+D">${ICON.copy}Duplicate</button><button class="btn small" data-act="selectConnected">Select its whole row</button></div>
       <span class="sm muted">Drag the desk to move it, or use the arrow keys. “Select its whole row” picks every desk touching this one so you can move them together. Ctrl+C and Ctrl+V copy and paste it where your mouse is. Press Delete to remove it.</span>
       ${state.confirm === 'deleteDesk'
-        ? `<div class="confirm"><span>Delete desk ${esc(d.number)}?${p ? ` ${esc(p.name)} will be left without a desk.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete desk</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+        ? `<div class="confirm"><span>Delete desk ${esc(d.number)}?${p ? ` ${esc(p.name)} will be left without a desk until a desk numbered ${esc(d.number)} is added again.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete desk</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
         : `<div><button class="btn small danger" data-act="deleteSel">Delete desk</button></div>`}
     </div>`;
   }
@@ -957,7 +957,7 @@ function groupPanelHTML(){
     </div>
     <div class="row2"><button class="btn small" data-act="makeArea">${ICON.area}Make an area around them</button><button class="btn small" data-act="growSel">Add touching desks</button></div>
     ${state.confirm === 'deleteDesk'
-      ? `<div class="confirm"><span>Delete these ${ds.length} desks?${seated ? ` ${seated} ${seated === 1 ? 'person' : 'people'} will be left without a desk.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete ${ds.length} desks</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
+      ? `<div class="confirm"><span>Delete these ${ds.length} desks?${seated ? ` ${seated} ${seated === 1 ? 'person' : 'people'} will be left without a desk until desks with the same numbers are added again.` : ''}</span><div class="row2"><button class="btn small danger solid" data-act="deleteSelYes">Delete ${ds.length} desks</button><button class="btn small" data-act="cancelConfirm">Cancel</button></div></div>`
       : `<div><button class="btn small danger" data-act="deleteSel">Delete ${ds.length} desks</button></div>`}`;
   return html;
 }
@@ -1022,13 +1022,13 @@ function personRowHTML(p){
     <span class="avatar">${esc(initials(p.name))}</span>
     <span class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${esc([p.team, p.employeeId].filter(Boolean).join(' · ') || 'No team')}</div></span>
     ${at ? `<span class="pill mono">Desk ${esc(at.number)}</span>`
-      : p.pendingDesk ? `<span class="pill warn" title="Desk ${esc(p.pendingDesk)} from your list isn't on the map yet">Waits for ${esc(p.pendingDesk)}</span>`
+      : p.pendingDesk ? `<span class="pill warn" title="Desk ${esc(p.pendingDesk)} isn't on the map. They'll be seated there when it's added.">Waits for ${esc(p.pendingDesk)}</span>`
       : '<span class="pill warn">No desk</span>'}
   </button></li>`;
 }
 function waitingHTML(p, seated){
   if (!p.pendingDesk) return '';
-  return `<div class="row2"><span class="sm muted" style="flex:1;min-width:180px">Your list puts ${esc(p.name)} at desk <b class="mono">${esc(p.pendingDesk)}</b>, which isn't on the map yet. ${seated ? "They'll move there" : "They'll be seated there"} as soon as you add it.</span>${state.readOnly ? '' : `<button class="btn small ghost" data-act="forgetWaiting" data-id="${esc(p.id)}">Forget it</button>`}</div>`;
+  return `<div class="row2"><span class="sm muted" style="flex:1;min-width:180px">${esc(p.name)} is waiting for desk <b class="mono">${esc(p.pendingDesk)}</b>, which isn't on the map. ${seated ? "They'll move there" : "They'll be seated there"} as soon as you add it.</span>${state.readOnly ? '' : `<button class="btn small ghost" data-act="forgetWaiting" data-id="${esc(p.id)}">Forget it</button>`}</div>`;
 }
 
 function peoplePanelHTML(){
@@ -1310,9 +1310,15 @@ function renumberDesks(list, start, order){
 function deleteSelection(){
   const n = state.sel.size;
   const one = n === 1 ? state.desks.get(single())?.number : null;
-  for (const id of state.sel) delRec('desks', id);
+  let kept = 0;
+  for (const id of state.sel) {
+    // whoever sat here waits for the number, so putting a desk with it back reseats them
+    const d = state.desks.get(id);
+    if (d && d.personId && state.people.has(d.personId)) { patchRec('people', d.personId, { pendingDesk: d.number }); kept++; }
+    delRec('desks', id);
+  }
   state.sel = new Set(); state.confirm = null; render(true);
-  toast(one ? `Deleted desk ${one}` : `Deleted ${n} desks`);
+  toast((one ? `Deleted desk ${one}.` : `Deleted ${n} desks.`) + (kept ? ` ${kept === 1 ? 'The person seated there goes' : `The ${kept} people seated there go`} back automatically if you add a desk with the same number.` : ''));
 }
 /* copy, paste, duplicate and flip */
 let clipboard = null;   // { w, h, x0, y0, items: [{ shape, rot, dx, dy }] }, offsets from the copied block's top-left
@@ -1547,7 +1553,7 @@ document.addEventListener('click', e => {
       renderPanel(true);
       if (window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
       break;
-    case 'forgetWaiting': clearWaiting(b.dataset.id); render(true); toast('Forgot the desk number from the list'); break;
+    case 'forgetWaiting': clearWaiting(b.dataset.id); render(true); toast('No longer waiting for that desk'); break;
     case 'filterTeam': setQuery(b.dataset.team); break;
     case 'copy': copyText(b.dataset.val, b); break;
     case 'openImport': openImport(); break;
