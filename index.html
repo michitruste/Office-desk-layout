@@ -56,6 +56,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .stats{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:4px 12px}
 .stats b{color:var(--ink);font-weight:600}
 .stats .warn b{color:var(--warn)}
+.statbtn{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.statbtn:hover{color:var(--ink)}
 .savechip{align-self:flex-start;margin-top:4px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-family:var(--f-mono);font-size:11px;color:var(--ok);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .savechip.warn{color:var(--warn);border-color:color-mix(in srgb, var(--warn) 40%, var(--line))}
 .search{position:relative;flex:1 1 260px;max-width:380px}
@@ -241,6 +243,25 @@ textarea.input{min-height:76px;resize:vertical}
 .prow .who{flex:1;min-width:0}
 .prow .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prow .tm{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .pill{white-space:nowrap;flex:none}
+.prow{user-select:none;-webkit-user-select:none}
+.prow.lifted{opacity:.4}
+/* rows drag with the mouse from anywhere; on touch only the grip drags, so the list still scrolls */
+.grip{display:grid;place-items:center;width:18px;height:32px;margin:0 -4px 0 -2px;color:var(--muted);opacity:.55;cursor:grab;touch-action:none;flex:none}
+.grip svg{width:16px;height:16px}
+.prow:hover .grip{opacity:1}
+.seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:9px;background:var(--sheet)}
+.seg button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;border:0;border-radius:7px;background:transparent;font-weight:600;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px var(--shadow)}
+.seg .n{font-family:var(--f-mono);font-size:11px;font-weight:500;color:var(--muted)}
+.pghost{position:fixed;left:0;top:0;z-index:60;pointer-events:none;display:flex;align-items:center;gap:9px;padding:6px 12px 6px 6px;max-width:280px;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 10px 28px var(--shadow);font-size:14px;font-weight:600;line-height:1.2}
+.pghost .avatar{width:30px;height:30px;font-size:13px;border-radius:7px}
+.pghost .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pghost .to{display:block;font-family:var(--f-mono);font-size:11px;font-weight:500;color:var(--muted)}
+.pghost.on .to{color:var(--accent)}
+.desk.droptarget{z-index:3}
+.desk.droptarget .shape{stroke:var(--accent);stroke-width:3;stroke-dasharray:none;fill:color-mix(in srgb, var(--accent) 24%, var(--surface))}
 .overview{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .ov{padding:10px;border:1px solid var(--line);border-radius:8px}
 .ov b{display:block;font-family:var(--f-display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
@@ -392,7 +413,7 @@ function fields(){ const d = state.settings.get('fields'); return d && Array.isA
 function fieldNames(f){ return [f.label, ...(f.aliases || [])].map(norm).filter(Boolean); }
 function saveFields(list){ setRec('settings', { id: 'fields', fields: JSON.parse(JSON.stringify(list)) }); }
 const NAME_PART_ALIASES = { firstName: ['firstname', 'first', 'givenname', 'nombres'], lastName: ['lastname', 'last', 'surname', 'familyname', 'apellido', 'apellidos'] };
-const DESK_ALIASES = ['desk', 'desknumber', 'deskno', 'table', 'tablenumber', 'seat', 'seatnumber', 'puesto', 'escritorio', 'mesa'];
+const DESK_ALIASES = ['desk', 'desknumber', 'deskno', 'desknum', 'table', 'tablenumber', 'tableno', 'tablenum', 'seat', 'seatnumber', 'puesto', 'escritorio', 'mesa', 'numeromesa', 'numerodemesa'];
 const LAYOUT_ALIASES = {
   desk: DESK_ALIASES,
   shape: ['shape','type','desktype','forma','tipo'],
@@ -412,14 +433,14 @@ const state = {
   desks: new Map(), people: new Map(), zones: new Map(), settings: new Map(), fieldsDraft: null,
   loaded: false, local: false, readOnly: false,
   sel: new Set(), selectedZone: null, selectedPerson: null,
-  tab: 'desk', arrange: false, multi: false, query: '',
+  tab: 'desk', arrange: false, multi: false, query: '', peopleFilter: 'all',
   zoom: window.innerWidth < 880 ? 0.6 : 1,
   editing: null,      // {id, deskId}: person form
   panelMode: null,    // 'addRow'
   confirm: null,
   didFit: false
 };
-let downloads = true, drag = null, placing = null, renderPending = false, forcePanelNext = false, needsRenderAfterDrag = false;
+let downloads = true, drag = null, placing = null, pdrag = null, renderPending = false, forcePanelNext = false, needsRenderAfterDrag = false;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -598,10 +619,12 @@ function seat(deskId, personId){
   const d = state.desks.get(deskId); if (!d) return;
   if (personId) {
     const from = seatIndex().get(personId);
+    const prev = d.personId && d.personId !== personId ? state.people.get(d.personId) : null;
     if (from && from.id !== deskId) patchRec('desks', from.id, { personId: null });
     const name = state.people.get(personId)?.name || 'Person';
     patchRec('desks', deskId, { personId });
-    toast(from && from.id !== deskId ? `Moved ${name} from desk ${from.number} to desk ${d.number}` : `${name} is now at desk ${d.number}`);
+    clearWaiting(personId);
+    toast((from && from.id !== deskId ? `Moved ${name} from desk ${from.number} to desk ${d.number}.` : `${name} is now at desk ${d.number}.`) + (prev ? ` ${prev.name} no longer has a desk.` : ''));
   } else {
     patchRec('desks', deskId, { personId: null });
     toast(`Desk ${d.number} is now free`);
@@ -612,8 +635,39 @@ function swapSeats(a, b){
   const da = state.desks.get(a), dbk = state.desks.get(b); if (!da || !dbk) return;
   patchRec('desks', a, { personId: dbk.personId || null });
   patchRec('desks', b, { personId: da.personId || null });
+  if (da.personId) clearWaiting(da.personId);
+  if (dbk.personId) clearWaiting(dbk.personId);
   toast(`Swapped desks ${da.number} and ${dbk.number}`);
   render(true);
+}
+// People imported with a desk number that isn't on the map yet keep it as pendingDesk.
+// Once a desk with that number exists they're seated there, if it's free; seating them anywhere by hand forgets it.
+function clearWaiting(pid){
+  const p = state.people.get(pid);
+  if (!p || !p.pendingDesk) return;
+  const { pendingDesk, ...rest } = p;
+  setRec('people', rest);
+}
+function seatWaiting(){
+  const waiting = [...state.people.values()].filter(p => p.pendingDesk);
+  if (!waiting.length) return [];
+  const list = desksArr(), seated = [];
+  for (const p of waiting) {
+    const found = findDeskByNumber(p.pendingDesk, list); if (!found) continue;
+    const d = state.desks.get(found.id);
+    if (!d.personId || !state.people.has(d.personId)) {
+      const from = seatIndex().get(p.id);
+      if (from) patchRec('desks', from.id, { personId: null });
+      patchRec('desks', d.id, { personId: p.id });
+      seated.push({ name: p.name, number: d.number });
+    }
+    clearWaiting(p.id);
+  }
+  return seated;
+}
+function waitNote(seated){
+  if (!seated.length) return '';
+  return seated.length === 1 ? ` ${seated[0].name} was waiting for desk ${seated[0].number} and is now seated there.` : ` ${seated.length} people who were waiting for these desk numbers are now seated.`;
 }
 
 /* ---------- rendering ---------- */
@@ -624,7 +678,7 @@ function render(forcePanel){
   requestAnimationFrame(() => { renderPending = false; renderNow(); });
 }
 function renderNow(){
-  if (drag || placing) { needsRenderAfterDrag = true; return; }
+  if (drag || placing || (pdrag && pdrag.moved)) { needsRenderAfterDrag = true; return; }
   rebuildTeamColors();
   for (const id of [...state.sel]) if (!state.desks.has(id)) state.sel.delete(id);
   if (state.selectedZone && !state.zones.has(state.selectedZone)) state.selectedZone = null;
@@ -646,7 +700,7 @@ function renderStats(){
   const seated = ds.filter(d => d.personId && state.people.has(d.personId)).length;
   const noDesk = state.people.size - si.size;
   el.innerHTML = `<span><b>${ds.length}</b> desks</span><span><b>${seated}</b> seated</span><span><b>${ds.length - seated}</b> free</span>`
-    + (noDesk > 0 ? `<span class="warn"><b>${noDesk}</b> without a desk</span>` : '');
+    + (noDesk > 0 ? `<button class="warn statbtn" data-act="showNoDesk" title="Show who's without a desk"><b>${noDesk}</b> without a desk</button>` : '');
   $('#peopleCount').textContent = state.people.size ? state.people.size : '';
 }
 
@@ -677,7 +731,8 @@ const ICON = {
   redo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>',
   mirrorH: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18" stroke-dasharray="2 3"/><path d="M9 6 3 18h6zM15 6l6 12h-6z"/></svg>',
   mirrorV: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18" stroke-dasharray="2 3"/><path d="M6 9 18 3v6zM6 15l12 6v-6z"/></svg>',
-  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  grip: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>'
 };
 
 function renderTools(){
@@ -948,7 +1003,7 @@ function overviewHTML(){
     <div class="overview"><div class="ov"><b>${ds.length}</b><span>Desks</span></div><div class="ov"><b>${seated}</b><span>Seated</span></div><div class="ov"><b>${ds.length - seated}</b><span>Free</span></div></div>`;
   if (noDesk.length) {
     html += `<div class="stack"><span class="eyebrow">Without a desk · ${noDesk.length}</span><ul class="plist">${noDesk.slice(0, 8).map(personRowHTML).join('')}</ul>
-      ${noDesk.length > 8 ? `<button class="btn small ghost" data-act="tab" data-tab="people">See all people</button>` : ''}</div>`;
+      ${noDesk.length > 8 ? `<button class="btn small ghost" data-act="showNoDesk">See all ${noDesk.length}</button>` : ''}</div>`;
   }
   if (state.zones.size) {
     html += `<div class="stack"><span class="eyebrow">Areas</span><div class="teamlist">${[...state.zones.values()].sort((a,b) => (a.name||'').localeCompare(b.name||'')).map(z => `<button class="chipbtn" data-act="openZone" data-id="${esc(z.id)}"><span class="dot" style="--tc:var(--accent)"></span>${esc(z.name || 'Area')}</button>`).join('')}</div></div>`;
@@ -961,11 +1016,19 @@ function overviewHTML(){
 
 function personRowHTML(p){
   const at = seatIndex().get(p.id);
-  return `<li><button class="prow" data-act="openPerson" data-id="${esc(p.id)}" style="--tc:${teamVar(p.team)}">
+  const grip = !state.readOnly && state.desks.size;
+  return `<li><button class="prow" data-act="openPerson" data-id="${esc(p.id)}" style="--tc:${teamVar(p.team)}" ${grip ? 'title="Drag onto a desk on the map to seat"' : ''}>
+    ${grip ? `<span class="grip" aria-hidden="true">${ICON.grip}</span>` : ''}
     <span class="avatar">${esc(initials(p.name))}</span>
     <span class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${esc([p.team, p.employeeId].filter(Boolean).join(' · ') || 'No team')}</div></span>
-    ${at ? `<span class="pill mono">Desk ${esc(at.number)}</span>` : '<span class="pill warn">No desk</span>'}
+    ${at ? `<span class="pill mono">Desk ${esc(at.number)}</span>`
+      : p.pendingDesk ? `<span class="pill warn" title="Desk ${esc(p.pendingDesk)} from your list isn't on the map yet">Waits for ${esc(p.pendingDesk)}</span>`
+      : '<span class="pill warn">No desk</span>'}
   </button></li>`;
+}
+function waitingHTML(p, seated){
+  if (!p.pendingDesk) return '';
+  return `<div class="row2"><span class="sm muted" style="flex:1;min-width:180px">Your list puts ${esc(p.name)} at desk <b class="mono">${esc(p.pendingDesk)}</b>, which isn't on the map yet. ${seated ? "They'll move there" : "They'll be seated there"} as soon as you add it.</span>${state.readOnly ? '' : `<button class="btn small ghost" data-act="forgetWaiting" data-id="${esc(p.id)}">Forget it</button>`}</div>`;
 }
 
 function peoplePanelHTML(){
@@ -977,7 +1040,7 @@ function peoplePanelHTML(){
     html += personCardHTML(sp);
     html += `<div class="stack"><span class="eyebrow">Desk</span>${at
       ? `<div class="row2"><span class="pill mono">Desk ${esc(at.number)}</span><button class="btn small" data-act="showDesk" data-id="${esc(at.id)}">Show on map</button>${state.readOnly ? '' : `<button class="btn small ghost" data-act="unseat" data-id="${esc(at.id)}">Remove from desk</button>`}</div>`
-      : `<span class="pill warn" style="align-self:flex-start">No desk yet</span>`}</div>`;
+      : `<span class="pill warn" style="align-self:flex-start">No desk yet</span>`}${waitingHTML(sp, !!at)}</div>`;
     if (!state.readOnly) {
       html += `<div class="stack"><label class="l" for="seatSel">${at ? 'Move to a free desk' : 'Seat at a free desk'}</label>
         <div class="row2"><select class="input" id="seatSel" style="flex:1"><option value="">${free.length ? 'Choose a desk…' : 'No free desks'}</option>${free.map(d => `<option value="${esc(d.id)}">Desk ${esc(d.number)}</option>`).join('')}</select>
@@ -989,11 +1052,22 @@ function peoplePanelHTML(){
     return html;
   }
   const q = state.query.trim().toLowerCase();
-  const list = peopleArr().filter(p => !q || personMatches(p, q));
+  const si = seatIndex();
+  const found = peopleArr().filter(p => !q || personMatches(p, q));
+  const nSeated = found.filter(p => si.has(p.id)).length;
+  const pf = state.peopleFilter;
+  const list = pf === 'seated' ? found.filter(p => si.has(p.id)) : pf === 'unseated' ? found.filter(p => !si.has(p.id)) : found;
   let html = state.readOnly ? '' : `<div class="row2"><button class="btn primary" data-act="newPerson">${ICON.plus}Add person</button><button class="btn" data-act="openImport">Import list</button><button class="btn" data-act="openFields">Fields</button></div>`;
-  if (!state.people.size) html += `<div class="empty-note">No people yet. Add them one by one, or import a spreadsheet with columns like Name, Employee ID, Email, Team and Desk.</div>`;
-  else if (!list.length) html += `<div class="empty-note">Nobody matches “${esc(state.query)}”.</div>`;
-  else html += `<div class="stack"><span class="eyebrow">${q ? `${list.length} match${list.length === 1 ? '' : 'es'}` : `${list.length} people`}</span><ul class="plist">${list.map(personRowHTML).join('')}</ul></div>`;
+  if (!state.people.size) return html + `<div class="empty-note">No people yet. Add them one by one, or import a spreadsheet with columns like Name, Employee ID, Email, Team and Desk.</div>`;
+  const segs = [['all', 'All', found.length], ['seated', 'With desk', nSeated], ['unseated', 'Without desk', found.length - nSeated]];
+  html += `<div class="seg" role="group" aria-label="Show people">${segs.map(([k, l, n]) => `<button data-act="peopleFilter" data-f="${k}" aria-pressed="${pf === k}">${l}<span class="n">${n}</span></button>`).join('')}</div>`;
+  if (!list.length) {
+    const what = pf === 'seated' ? 'has a desk' : pf === 'unseated' ? 'is without a desk' : '';
+    html += `<div class="empty-note">${q ? `Nobody${what ? ' who ' + what : ''} matches “${esc(state.query)}”.` : pf === 'unseated' ? 'Everyone has a desk.' : 'Nobody has a desk yet.'}</div>`;
+    return html;
+  }
+  const dragHint = !state.readOnly && state.desks.size ? ' · drag onto a desk to seat' : '';
+  html += `<div class="stack"><span class="eyebrow">${q ? `${list.length} match${list.length === 1 ? '' : 'es'}` : `${list.length} ${list.length === 1 ? 'person' : 'people'}`}${dragHint}</span><ul class="plist">${list.map(personRowHTML).join('')}</ul></div>`;
   return html;
 }
 
@@ -1151,10 +1225,11 @@ function addRow(){
     const d = { id: uid('d'), number: nums[i], shape: o.shape, rot: 0, x: at.x + c.x, y: at.y + c.y, personId: null };
     setRec('desks', d); ids.push(d.id);
   });
+  const waited = seatWaiting();
   state.panelMode = null; state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null;
   render(true);
   scrollToCell(at.x, at.y);
-  toast(`Added ${total} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the whole row.`);
+  toast(`Added ${total} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the whole row.` + waitNote(waited));
 }
 
 /* ---------- actions ---------- */
@@ -1194,8 +1269,9 @@ function addDesk(shape, at){
   const spot = at || findBox(s.w, s.h);
   const d = { id: uid('d'), number: nextDeskNumber(), shape, rot: 0, x: spot.x, y: spot.y, personId: null };
   setRec('desks', d);
+  const waited = seatWaiting();
   selectDesk(d.id, { scrollMap: !at });
-  toast(at ? `Added desk ${d.number}` : `Added desk ${d.number}. Drag it into place, or next time drag the button straight onto the map.`);
+  toast((at ? `Added desk ${d.number}.` : `Added desk ${d.number}. Drag it into place, or next time drag the button straight onto the map.`) + waitNote(waited));
 }
 function rotateDesk(id){
   const d = state.desks.get(id); if (!d) return;
@@ -1273,9 +1349,10 @@ function pasteClip(clip, want){
   const placed = clip.items.map(it => ({ shape: it.shape, rot: it.rot, x: spot.x + it.dx, y: spot.y + it.dy })).sort((a, b) => (a.y - b.y) || (a.x - b.x));
   const nums = numberSeq(nextDeskNumber(), placed.length);
   const ids = placed.map((p, i) => { const d = { id: uid('d'), number: nums[i], ...p, personId: null }; setRec('desks', d); return d.id; });
+  const waited = seatWaiting();
   state.sel = new Set(ids); state.selectedZone = null; state.tab = 'desk'; state.confirm = null; state.editing = null; state.panelMode = null;
   render(true); scrollToCell(spot.x, spot.y);
-  toast(ids.length === 1 ? `Added desk ${nums[0]}` : `Added ${ids.length} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the group.`);
+  toast((ids.length === 1 ? `Added desk ${nums[0]}.` : `Added ${ids.length} desks, numbers ${nums[0]} to ${nums[nums.length - 1]}. Drag any of them to move the group.`) + waitNote(waited));
 }
 // copies without a mouse position go just to the right of the original
 const besideOf = c => ({ x: c.x0 + c.w + 1, y: c.y0 });
@@ -1350,7 +1427,8 @@ const STARTER = [
 ];
 function addStarter(){
   STARTER.forEach(([shape, rot, x, y], i) => setRec('desks', { id: uid('d'), number: String(i + 1), shape, rot, x, y, personId: null }));
-  render(true); toast('Starter layout added. Turn on Arrange desks to move things around.');
+  const waited = seatWaiting();
+  render(true); toast('Starter layout added. Turn on Arrange desks to move things around.' + waitNote(waited));
 }
 function clearExamples(){
   const ex = new Set([...state.people.values()].filter(p => p.example).map(p => p.id));
@@ -1421,7 +1499,7 @@ document.addEventListener('click', e => {
     case 'renumberSel': {
       const list = [...state.sel].map(id => state.desks.get(id)).filter(Boolean);
       const err = renumberDesks(list, $('#grpStart').value.trim(), $('#grpOrder').value);
-      if (err) { const el = $('#grpErr'); el.textContent = err; el.hidden = false; } else toast(`Renumbered ${list.length} desks`);
+      if (err) { const el = $('#grpErr'); el.textContent = err; el.hidden = false; } else toast(`Renumbered ${list.length} desks.` + waitNote(seatWaiting()));
       break;
     }
     case 'deleteSel': state.confirm = 'deleteDesk'; renderPanel(true); break;
@@ -1463,6 +1541,13 @@ document.addEventListener('click', e => {
       state.confirm = null; state.selectedPerson = null; render(true); toast(`Deleted ${p?.name || 'person'}`); break;
     }
     case 'tab': state.tab = b.dataset.tab; state.selectedPerson = null; renderPanel(true); break;
+    case 'peopleFilter': state.peopleFilter = b.dataset.f; renderPanel(true); break;
+    case 'showNoDesk':
+      state.tab = 'people'; state.peopleFilter = 'unseated'; state.selectedPerson = null; state.editing = null; state.panelMode = null; state.confirm = null;
+      renderPanel(true);
+      if (window.innerWidth < 880) requestAnimationFrame(() => $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' }));
+      break;
+    case 'forgetWaiting': clearWaiting(b.dataset.id); render(true); toast('Forgot the desk number from the list'); break;
     case 'filterTeam': setQuery(b.dataset.team); break;
     case 'copy': copyText(b.dataset.val, b); break;
     case 'openImport': openImport(); break;
@@ -1525,7 +1610,7 @@ function saveDeskNumber(){
   if (!v) { toast('Enter a desk number'); return; }
   const dup = desksArr().find(d => d.id !== id && norm(d.number) === norm(v));
   if (dup) { toast(`${v} is already used by another desk`); return; }
-  patchRec('desks', id, { number: v }); $('#deskNum').blur(); render(true); toast(`Desk renamed to ${v}`);
+  patchRec('desks', id, { number: v }); const waited = seatWaiting(); $('#deskNum').blur(); render(true); toast(`Desk renamed to ${v}.` + waitNote(waited));
 }
 function saveZoneName(){
   const id = state.selectedZone; const v = ($('#zoneName')?.value || '').trim();
@@ -1855,6 +1940,84 @@ document.addEventListener('keydown', e => {
   toast(`Press ${e.key === 'Backspace' ? 'Backspace' : 'Delete'} again to delete ${state.sel.size === 1 ? 'this desk' : `these ${state.sel.size} desks`}`);
 });
 
+/* drag a person from the side panel onto a desk on the map to seat them there */
+let swallowRowClick = false;
+$('#pbody').addEventListener('pointerdown', e => {
+  const row = e.target.closest('.prow');
+  if (!row || e.button > 0 || state.readOnly || !state.desks.size || pdrag) return;
+  if (e.pointerType === 'touch' && !e.target.closest('.grip')) return;
+  if (e.pointerType === 'mouse') e.preventDefault(); // no text selection while dragging; the click still opens the person
+  swallowRowClick = false;
+  pdrag = { id: row.dataset.id, row, pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, moved: false, ghost: null, target: null, armed: false, raf: 0 };
+});
+document.addEventListener('pointermove', e => {
+  const p = pdrag; if (!p || e.pointerId !== p.pointerId) return;
+  if (!p.moved) {
+    if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 6) return;
+    const person = state.people.get(p.id); if (!person) { pdrag = null; return; }
+    p.moved = true;
+    p.ghost = document.createElement('div'); p.ghost.className = 'pghost';
+    p.ghost.style.setProperty('--tc', teamVar(person.team));
+    p.ghost.innerHTML = `<span class="avatar">${esc(initials(person.name))}</span><span style="min-width:0"><span class="nm">${esc(person.name)}</span><span class="to">Drop on a desk</span></span>`;
+    document.body.appendChild(p.ghost); document.body.classList.add('placing');
+    p.row.classList.add('lifted');
+    p.raf = requestAnimationFrame(pdragScroll);
+  }
+  p.x = e.clientX; p.y = e.clientY;
+  p.ghost.style.transform = `translate(${p.x + 14}px, ${p.y + 14}px)`;
+  pdragTarget();
+});
+function pdragTarget(){
+  const p = pdrag;
+  const hit = document.elementFromPoint(p.x, p.y)?.closest('.desk');
+  const id = hit && planEl.contains(hit) ? hit.dataset.id : null;
+  const el = id ? deskEl(id) : null;
+  if (id === p.target && (!el || el.classList.contains('droptarget'))) return;
+  planEl.querySelectorAll('.desk.droptarget').forEach(n => n.classList.remove('droptarget'));
+  p.target = id;
+  el?.classList.add('droptarget');
+  const d = id ? state.desks.get(id) : null;
+  const who = d && d.personId && d.personId !== p.id ? state.people.get(d.personId) : null;
+  p.ghost.classList.toggle('on', !!d);
+  p.ghost.querySelector('.to').textContent = !d ? 'Drop on a desk' : d.personId === p.id ? `Already at desk ${d.number}` : `Desk ${d.number}` + (who ? ` · replaces ${shortName(who.name)}` : '');
+}
+// scroll the map while the pointer is near its edges (once it has been inside), and the page on phones
+function pdragScroll(){
+  const p = pdrag; if (!p || !p.moved) return;
+  const sc = $('#scroll'), r = sc.getBoundingClientRect(), EDGE = 36, MAX = 16;
+  const ramp = (pos, lo, hi) => pos < lo + EDGE ? -Math.ceil(Math.min(EDGE, lo + EDGE - pos) / EDGE * MAX) : pos > hi - EDGE ? Math.ceil(Math.min(EDGE, pos - hi + EDGE) / EDGE * MAX) : 0;
+  const inside = p.x > r.left && p.x < r.right && p.y > r.top && p.y < r.bottom;
+  if (inside && p.x > r.left + EDGE && p.x < r.right - EDGE && p.y > r.top + EDGE && p.y < r.bottom - EDGE) p.armed = true;
+  let scrolled = false;
+  if (inside && p.armed) {
+    const bx = sc.scrollLeft, by = sc.scrollTop;
+    sc.scrollLeft += ramp(p.x, r.left, r.right);
+    if (sc.scrollHeight > sc.clientHeight + 1) sc.scrollTop += ramp(p.y, r.top, r.bottom);
+    scrolled = sc.scrollLeft !== bx || sc.scrollTop !== by;
+  }
+  if (narrow()) { const vy = ramp(p.y, 0, window.innerHeight), by = window.scrollY; if (vy) { window.scrollBy(0, vy); scrolled = scrolled || window.scrollY !== by; } }
+  if (scrolled) pdragTarget();
+  p.raf = requestAnimationFrame(pdragScroll);
+}
+function endPersonDrag(cancelled){
+  const p = pdrag; if (!p) return;
+  pdrag = null;
+  if (!p.moved) return;
+  cancelAnimationFrame(p.raf);
+  p.ghost.remove(); document.body.classList.remove('placing'); p.row.classList.remove('lifted');
+  planEl.querySelectorAll('.desk.droptarget').forEach(n => n.classList.remove('droptarget'));
+  swallowRowClick = true; setTimeout(() => { swallowRowClick = false; }, 0);
+  const d = !cancelled && p.target ? state.desks.get(p.target) : null;
+  needsRenderAfterDrag = false;
+  if (d && d.personId !== p.id && state.people.has(p.id)) seat(d.id, p.id);
+  else render();
+}
+document.addEventListener('pointerup', e => { if (pdrag && e.pointerId === pdrag.pointerId) endPersonDrag(false); });
+document.addEventListener('pointercancel', e => { if (pdrag && e.pointerId === pdrag.pointerId) endPersonDrag(true); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && pdrag) endPersonDrag(true); });
+// a drag that ends back over its own row would otherwise open that person
+document.addEventListener('click', e => { if (swallowRowClick) { swallowRowClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+
 /* ---------- spreadsheet import / export ---------- */
 let xlsxPromise = null;
 function loadXLSX(){
@@ -1890,7 +2053,7 @@ function renderImport(){
       </div>
       <div class="helpgrid">
         <div class="box"><h3>People sheet</h3>
-          <p>One row per person with a name column (or First name + Last name). Other columns are matched to your fields by their titles, and you can change any match before importing. Desk is the desk number.</p>
+          <p>One row per person with a name column (or First name + Last name). Other columns are matched to your fields by their titles, and you can change any match before importing. Desk (or Table #) is the desk number: people are seated there, or as soon as that desk is added to the map.</p>
           <p>People already on the map are recognised by the fields ticked “Recognise people by this” (by default Employee ID, Customer ID, email or name) and updated instead of duplicated. Manage them with People → Fields.</p>
           ${downloads ? '<div><button class="btn small" data-imp="tplPeople">People template</button></div>' : ''}</div>
         <div class="box"><h3>Desk layout sheet</h3>
@@ -1939,7 +2102,7 @@ function renderImport(){
     const noName = !Q.mapping.name && !Q.mapping.firstName && !Q.mapping.lastName;
     secs.push(`<div class="impsec"><h3>People <span class="muted sm">· sheet “${esc(Q.sheet)}”</span></h3>
       <div class="sumrow"><span class="pill ok">${Q.created} new</span><span class="pill free">${Q.updated} updated</span><span class="pill mono">${Q.seated} seated</span>${Q.missingDesks.length ? `<span class="pill warn">${Q.missingDesks.length} desk numbers not found</span>` : ''}${Q.skipped ? `<span class="pill warn">${Q.skipped} without a name skipped</span>` : ''}</div>
-      ${Q.missingDesks.length ? `<p class="sm muted">Not on the map: <span class="mono">${esc(Q.missingDesks.slice(0, 12).join(', '))}${Q.missingDesks.length > 12 ? '…' : ''}</span>. Those people will be imported without a desk.</p>` : ''}
+      ${Q.missingDesks.length ? `<p class="sm muted">Not on the map: <span class="mono">${esc(Q.missingDesks.slice(0, 12).join(', '))}${Q.missingDesks.length > 12 ? '…' : ''}</span>. Those people will be imported without a desk for now and seated automatically as soon as you add a desk with their number.</p>` : ''}
       ${noName ? `<div class="confirm"><span>Choose which column holds each person's name. People without a name can't be imported.</span></div>` : ''}
       <div class="stack"><span class="eyebrow">Where each column goes</span>
         <p class="sm muted" style="margin:0">Check the matches and change any that are wrong. Your choices are remembered for next time.</p>
@@ -2177,17 +2340,21 @@ function runImport(){
       setRec('people', p); it.pid = p.id;
     }
     for (const it of P.people.items) {
-      if (!it.deskId || !state.desks.has(it.deskId)) continue;
-      const from = seatIndex().get(it.pid);
-      if (from && from.id !== it.deskId) patchRec('desks', from.id, { personId: null });
-      patchRec('desks', it.deskId, { personId: it.pid });
+      if (it.deskId && state.desks.has(it.deskId)) {
+        const from = seatIndex().get(it.pid);
+        if (from && from.id !== it.deskId) patchRec('desks', from.id, { personId: null });
+        patchRec('desks', it.deskId, { personId: it.pid });
+        clearWaiting(it.pid);
+      } else if (it.deskNumber) patchRec('people', it.pid, { pendingDesk: it.deskNumber });
     }
     done.push(`${P.people.items.length} people`);
   }
+  // a layout sheet may have just added desks that people from an earlier import were waiting for
+  const waited = seatWaiting();
   closeImport(); state.sel = new Set(); state.selectedZone = null; state.selectedPerson = null;
   render(true);
   requestAnimationFrame(() => requestAnimationFrame(fitToScreen));
-  toast(`Imported ${done.join(', ')}`);
+  toast(`Imported ${done.join(', ')}.` + waitNote(waited));
 }
 
 async function saveFile(filename, data){
@@ -2204,7 +2371,7 @@ async function exportXlsx(){
     const peopleRows = peopleArr().map(p => {
       const o = {};
       for (const f of fields()) o[f.label] = p[f.k] || '';
-      o['Desk'] = si.get(p.id)?.number || '';
+      o['Desk'] = si.get(p.id)?.number || p.pendingDesk || '';
       return o;
     });
     const deskRows = desksArr().sort(byNumber).map(d => {
