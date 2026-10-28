@@ -9,6 +9,9 @@ A floor plan of the office desks: who sits where, their details, rows, areas, an
 | `index.html` | The desk map app. Open it in a browser. |
 | `desk-map-data.json` | The map's data: desks, people and areas. It's a copy of the online map as of the day this folder was made. |
 | `README.md` | This file. |
+| `coffee-run.html` | A small game played on your floor plan. See [Just for fun](#just-for-fun). |
+| `office-life.html` | Your floor plan with people going about their day, for a wall screen. See [Just for fun](#just-for-fun). |
+| `fun-map.js` | Shared by the two pages above. It reads the map; it never changes it. |
 
 ## Getting started (Chrome or Edge)
 
@@ -66,3 +69,19 @@ These can't write to files directly. The map saves in the browser instead, and t
 - **Clearing the browser's site data** erases the browser copy. If a data file is linked, the file still has everything.
 - **Example people:** the 13 people in the starting data are made up. Use **Clear examples** on the yellow banner once you import your real list.
 - **Online version:** this standalone copy is separate from the map in your Claude account. To move data between them, export an Excel workbook from one and import it into the other.
+
+## Just for fun
+
+Two extra pages use the same map. They only read it, so nothing you do in them changes your desks or people. Each one uses, in order: the copy saved in this browser by `index.html`, then `desk-map-data.json` when the folder is served as a website, then a small demo office. **Open a map file…** loads any `desk-map-data.json`. In Chrome and Edge, open them from the same place as `index.html` (same folder, or same website) so they find the browser copy.
+
+**Coffee Run** (`coffee-run.html`): you have a tray and the office wants coffee. Pick up cups at the coffee machine and take them to the desks with an order bubble before the ring around the person runs out. Walk with the arrow keys or WASD, or click (tap on a phone) where to go. Three people giving up ends the shift. Quick deliveries in a row raise your multiplier. From level 3 chatty colleagues wander about, and bumping into one costs you a moment. Walls, pillars and desks block you, and doors let you through.
+
+**Office Life** (`office-life.html`): people arrive in the morning, sit at their own desks, fetch coffee, stop by each other's desks, hold quick meetings, go to lunch and head home in the evening. The lights dim after dark. **Live** follows the real clock (nobody comes in at weekends). **Fast day** plays a whole working day in about four minutes. Hover or tap someone to see who they are and what they're doing. **Full screen** (or **F**) suits a wall screen, and **H** hides the side panel. The side panel lists work anniversaries from the last week and the next month, plus anyone who joined in the last 30 days. When there are none, it names who's next. People with an anniversary this week carry a 🎈. On the day itself their desk gets confetti, and in Coffee Run they order cake, which scores double.
+
+Both pages work out a few things from the map:
+
+- **The coffee machine** goes in an area whose name includes *Kitchen*, *Coffee*, *Café*, *Break*, *Pantry*, *Lounge*, *Cocina* or *Comedor*. Without one, it goes in an open spot that's a fair walk from everyone.
+- **Meetings** happen in an area with *Meeting*, *Conference*, *Huddle*, *Sala* or *Reunión* in its name, if there is one.
+- **People come in** through the door nearest the edge of the map. When walls enclose the office, nobody wanders outside them.
+- **Colours** follow Team, the same as the map's default *Colour by*.
+- **If almost nobody has a desk yet** (fewer than 4 people seated), the people without one borrow free desks for the fun pages only.

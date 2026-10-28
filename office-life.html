@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Office Life</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Same tokens as index.html, so the office looks like the map it's drawn from. */
+:root{
+  --paper:#eceff0; --sheet:#f7f9f9; --surface:#ffffff; --ink:#1a2529; --muted:#5b6a6f;
+  --line:#d3dbdd; --line-strong:#9aa8ad; --grid:#e2e8ea; --grid-major:#d2dadd;
+  --accent:#2453a6; --accent-ink:#ffffff; --accent-soft:#e3ebf8;
+  --danger:#b23a2e; --danger-soft:#fbe9e6; --ok:#2c7650; --ok-soft:#e2f2e9; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --shadow:rgba(20,35,45,.16); --scrim:rgba(18,26,30,.45);
+  --t0:#c4561c; --t1:#2c7a4e; --t2:#7a49b3; --t3:#0e7b8a; --t4:#b52f6b; --t5:#8c6a0f; --t6:#3a5fc6; --t7:#5f7322;
+  --coffee:#7a4a24; --night:#0b1a2e; --lamp:#ffd27a;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111719; --sheet:#161e21; --surface:#1d272b; --ink:#e4ecee; --muted:#9aabb0;
+    --line:#2e3b40; --line-strong:#5d6f75; --grid:#1d272a; --grid-major:#263337;
+    --accent:#7da4ec; --accent-ink:#0d1a30; --accent-soft:#1f2c44;
+    --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
+    --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
+    --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
+    --coffee:#d7a374; --night:#02060c; --lamp:#ffcf6e;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111719; --sheet:#161e21; --surface:#1d272b; --ink:#e4ecee; --muted:#9aabb0;
+  --line:#2e3b40; --line-strong:#5d6f75; --grid:#1d272a; --grid-major:#263337;
+  --accent:#7da4ec; --accent-ink:#0d1a30; --accent-soft:#1f2c44;
+  --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
+  --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
+  --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
+  --coffee:#d7a374; --night:#02060c; --lamp:#ffcf6e;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+.app{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;gap:10px;padding:12px max(16px, env(safe-area-inset-left, 0px)) 16px max(16px, env(safe-area-inset-right, 0px))}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.brand{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:0;max-width:100%}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:28px;line-height:1;margin:0}
+.brand .src{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clock{display:flex;align-items:baseline;gap:8px}
+.clock .time{font-family:var(--f-mono);font-weight:600;font-size:24px;font-variant-numeric:tabular-nums;line-height:1}
+.clock .day{font-size:13px;color:var(--muted)}
+.actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;line-height:1.2;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:var(--line-strong)}
+.btn svg{width:16px;height:16px;flex:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:2px}
+.seg button{border:0;background:none;padding:6px 11px;border-radius:6px;font-weight:600;font-size:13.5px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;min-height:0}
+.main.wide{grid-template-columns:minmax(0,1fr)}
+.main.wide .side{display:none}
+.stage{position:relative;display:grid;place-items:center;min-height:0;min-width:0;overflow:hidden}
+canvas{display:block;border-radius:10px;box-shadow:0 1px 0 var(--line),0 6px 24px -14px var(--shadow)}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px -12px var(--shadow);padding:7px 10px;font-size:13.5px;line-height:1.35;max-width:240px;z-index:2}
+.tip b{display:block;font-size:14.5px}
+.tip .m{color:var(--muted)}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.panel h2{font-family:var(--f-display);font-weight:700;font-size:19px;line-height:1.1;margin:0 0 8px}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.list li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;font-size:14px;line-height:1.3}
+.dot{width:12px;height:12px;border-radius:50%;grid-row:span 2}
+.list .m{color:var(--muted);font-size:12.5px}
+.chip{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.03em;padding:1px 7px;border-radius:999px;background:var(--ok-soft);color:var(--ok);margin-left:4px;vertical-align:1px}
+.chip.soon{background:var(--accent-soft);color:var(--accent)}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;font-size:13.5px;line-height:1.35}
+.log li{display:grid;grid-template-columns:46px 1fr;gap:6px}
+.log li.empty{display:block}
+.log time{font-family:var(--f-mono);font-size:12px;color:var(--muted);padding-top:1px}
+.empty{color:var(--muted);font-size:13.5px;margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.note{font-size:13px;padding:7px 10px;border-radius:8px;background:var(--warn-soft);color:var(--warn);margin:0}
+@media (max-width:900px){
+  .main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(300px,1fr) auto}
+  .side{overflow:visible}
+  .app{height:auto;min-height:100%}
+}
+@media (max-width:640px){ .brand{flex-basis:100%} .brand h1{font-size:24px} .brand .src{white-space:normal} .clock .time{font-size:20px} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <h1>Office Life</h1>
+      <div class="src" id="src">Loading the map…</div>
+    </div>
+    <div class="clock" aria-live="off"><span class="time" id="time">--:--</span><span class="day" id="day"></span></div>
+    <div class="actions">
+      <div class="seg" role="group" aria-label="Clock">
+        <button type="button" data-mode="live" title="Follow the real clock">Live</button>
+        <button type="button" data-mode="fast" title="A whole working day in about four minutes">Fast day</button>
+      </div>
+      <button class="btn" id="playBtn" type="button" title="Pause (Space)" aria-label="Pause"></button>
+      <button class="btn" id="sideBtn" type="button" title="Show or hide the side panel (H)">Panel</button>
+      <button class="btn" id="fullBtn" type="button" title="Full screen (F)">Full screen</button>
+      <button class="btn" id="openBtn" type="button">Open map…</button>
+      <a class="btn" href="index.html">Desk map</a>
+    </div>
+  </header>
+  <div class="main" id="main">
+    <main class="stage" id="stage">
+      <canvas id="cv" aria-label="The office floor plan with people moving around"></canvas>
+      <div class="tip" id="tip" hidden></div>
+    </main>
+    <aside class="side">
+      <section class="panel" id="annPanel"><h2>Anniversaries</h2><div id="ann"></div></section>
+      <section class="panel"><h2>What’s happening</h2><ul class="log" id="log"></ul></section>
+      <section class="panel" id="teamPanel"><h2 id="teamTitle">Teams</h2><div class="legend" id="legend"></div></section>
+    </aside>
+  </div>
+</div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script src="fun-map.js"></script>
+<script>
+'use strict';
+const F = window.FunMap;
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const EMOJI = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+/* ---------- the clock ---------- */
+// Live follows the real time. Fast day runs 07:00 to 20:00 in about four minutes, then starts the next day.
+const DAY_START = 7 * 60, DAY_END = 20 * 60, FAST_RATE = (DAY_END - DAY_START) / 240; // sim minutes per real second
+let mode = lsGet('office-life:mode') || (isWorkHours(new Date()) ? 'live' : 'fast');
+let paused = false, simMin = 0, simDay = 0, fastClock = DAY_START + 60;
+function isWorkHours(d){ const m = d.getHours() * 60 + d.getMinutes(), wd = d.getDay(); return wd > 0 && wd < 6 && m >= 8 * 60 && m < 18 * 60 + 30; }
+const rate = () => mode === 'live' ? 1 / 60 : FAST_RATE;
+const hhmm = m => { m = ((Math.floor(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const weekend = () => mode === 'live' && [0, 6].includes(new Date().getDay());
+function tickClock(dt){
+  if (mode === 'live') { const d = new Date(); simMin = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; simDay = Math.floor((d - new Date(2000, 0, 1)) / 864e5); return; }
+  if (!paused) fastClock += dt * FAST_RATE;
+  if (fastClock >= DAY_END) { fastClock = DAY_START; simDay++; newDay(); log('A new day begins'); }
+  simMin = fastClock;
+}
+
+/* ---------- people ---------- */
+let world = null, agents = [], pal, S = 20, dpr = 1, mapImg = null, events = [], bits = [], annList = [];
+const WALK = { live: 1.7, fast: 2.6 };
+const TRIPS = [['coffee', 34], ['chat', 30], ['stretch', 14], ['area', 10], ['meeting', 12]];
+
+function setMap(data, src, fileName){
+  world = F.build(data);
+  $('#src').textContent = F.sourceLabel(src, fileName) + (world.hotDesking ? ' · people without a desk are borrowing free ones' : '');
+  annList = F.anniversaries([...world.people.values()]);
+  const ann = new Map(annList.map(a => [a.person, a]));
+  agents = world.seated.map((s, i) => {
+    const a = ann.get(s.person);
+    return { i, person: s.person, desk: s.desk, seat: s.desk.seat, ci: world.colorIndex(s.person), team: world.groupOf(s.person),
+      name: F.shortName(s.person.name) || 'Desk ' + s.desk.number, ini: F.initials(s.person.name || String(s.desk.number)),
+      party: a && F.celebrating(a) ? a : null, x: 0, y: 0, state: 'out', path: null, then: null, until: 0, minReal: 0, what: '', emoji: '', with: null, phase: rand(0, 6) };
+  });
+  events = []; bits = [];
+  newDay(true);
+  layout(); renderSide();
+}
+// everyone's plan for the day, in minutes after midnight
+function newDay(placeNow){
+  for (const a of agents) {
+    a.plan = { arrive: 8 * 60 + rand(-35, 70), leave: 17 * 60 + rand(-25, 85), lunch: 12 * 60 + rand(0, 70), lunchFor: rand(30, 55), lunchOut: Math.random() < 0.45 };
+    a.lunched = false; a.next = a.plan.arrive + rand(15, 45);
+    a.state = 'out'; a.path = null; a.with = null; a.emoji = ''; a.what = 'Not in yet';
+  }
+  if (placeNow) {
+    tickClock(0);
+    const t = simMin;
+    for (const a of agents) {
+      const p = a.plan;
+      if (weekend() || t < p.arrive || t >= p.leave) { a.what = t >= p.leave ? 'Gone home' : 'Not in yet'; continue; }
+      if (t >= p.lunch) a.lunched = true;
+      if (p.lunchOut && t >= p.lunch && t < p.lunch + p.lunchFor) { a.what = 'Out for lunch'; a.away = 'lunch'; continue; }
+      sit(a); a.next = t + rand(2, 40);
+    }
+  }
+}
+function sit(a){ a.state = 'seat'; a.x = a.seat.x; a.y = a.seat.y; a.path = null; a.emoji = ''; a.what = 'At their desk'; a.with = null; }
+function walkTo(a, cell, then, what){
+  const path = cell ? world.route(a.x, a.y, cell[0], cell[1]) : null;
+  if (!path) return false;
+  a.state = 'walk'; a.path = path; a.then = then; a.what = what; a.emoji = '';
+  return true;
+}
+function goHome(a, what){ return walkTo(a, [a.seat.cx, a.seat.cy], { kind: 'seat' }, what || 'Heading back to their desk'); }
+function stay(a, cell, minutes, emoji, what, onArrive){
+  return walkTo(a, cell, { kind: 'stay', minutes, emoji, what, onArrive }, 'Walking over');
+}
+const seatedAgents = () => agents.filter(a => a.state === 'seat');
+
+function think(a){
+  const t = simMin, p = a.plan;
+  if (a.state === 'out') {
+    if (weekend() || t < p.arrive || t >= p.leave) return;
+    if (a.away === 'lunch' && t < p.lunch + p.lunchFor) return;
+    const e = world.entrance;
+    a.x = e[0] + 0.5; a.y = e[1] + 0.5;
+    if (goHome(a, a.away === 'lunch' ? 'Back from lunch' : 'Just arrived')) log(a.away === 'lunch' ? `${a.name} is back from lunch` : `${a.name} arrived`, a);
+    a.away = null;
+    return;
+  }
+  if (a.state !== 'seat' || a.with) return; // don't walk off mid-conversation
+  if (t >= p.leave) {
+    if (walkTo(a, world.entrance, { kind: 'out' }, 'Heading home')) { a.away = 'home'; log(`${a.name} headed home`, a); }
+    return;
+  }
+  if (!a.lunched && t >= p.lunch) {
+    a.lunched = true;
+    if (p.lunchOut || !world.coffee) { if (walkTo(a, world.entrance, { kind: 'out' }, 'Off to lunch')) { a.away = 'lunch'; log(`${a.name} went out for lunch`, a); } }
+    else { const c = world.coffee.cell; stay(a, world.randomNear(c[0] + 0.5, c[1] + 0.5, 3), p.lunch + p.lunchFor - t, '🍽️', 'Having lunch', () => log(`${a.name} is having lunch${world.coffee.area ? ' in ' + world.coffee.area : ''}`, a)); }
+    return;
+  }
+  if (t < a.next) return;
+  a.next = t + rand(25, 75);
+  trip(a);
+}
+function trip(a){
+  let total = TRIPS.reduce((s, [, w]) => s + w, 0), r = Math.random() * total, kind = 'coffee';
+  for (const [k, w] of TRIPS) { if ((r -= w) < 0) { kind = k; break; } }
+  if (kind === 'coffee' && world.coffee) {
+    const c = world.coffee.cell;
+    return stay(a, world.randomNear(c[0] + 0.5, c[1] + 0.5, 2), rand(4, 10), '☕', 'Getting a coffee', () => log(`${a.name} grabbed a coffee`, a));
+  }
+  if (kind === 'chat') {
+    // someone who'll still be at their desk by the time you get there
+    const others = seatedAgents().filter(b => b !== a && !b.with && b.next - simMin > 25 && b.plan.leave - simMin > 25 && (b.lunched || b.plan.lunch - simMin > 25));
+    const b = others.length ? (Math.random() < 0.65 && others.some(o => o.team === a.team) ? pick(others.filter(o => o.team === a.team)) : pick(others)) : null;
+    const spots = b ? world.besideSeat(b.desk) : [];
+    if (b && spots.length) return stay(a, pick(spots), rand(5, 14), '💬', `Chatting with ${b.name}`, () => {
+      if (b.state !== 'seat' || b.with) { a.emoji = '🤷'; a.what = `${b.name} wasn’t there`; a.until = simMin + 1; log(`${a.name} came by, but ${b.name} was away`, a); return; }
+      b.with = a; b.emoji = '💬'; b.what = `Chatting with ${a.name}`; a.with = b; log(`${a.name} stopped by ${b.name}’s desk`, a); });
+  }
+  if (kind === 'meeting') {
+    const mates = seatedAgents().filter(b => b !== a && !b.with).sort((x, y) => (y.team === a.team) - (x.team === a.team) || Math.random() - 0.5).slice(0, Math.floor(rand(1, 4)));
+    if (mates.length) {
+      const group = [a, ...mates], cells = meetingCells(group.length);
+      if (cells) {
+        const until = rand(20, 40), title = a.team && mates.every(m => m.team === a.team) ? `${a.team} huddle` : 'Quick meeting';
+        group.forEach((m, i) => stay(m, cells[i], until, '📊', title, i ? null : () => log(`${title}: ${group.map(g => g.name).join(', ')}`, a)));
+        return;
+      }
+    }
+  }
+  if (kind === 'area' && world.zones.length) {
+    const z = pick(world.zones), cells = world.zoneCells(z).filter(([x, y]) => !world.deskAtCell(x, y));
+    if (cells.length) return stay(a, pick(cells), rand(3, 8), '👀', `Over in ${z.name || 'another area'}`, () => log(`${a.name} wandered over to ${z.name || 'another area'}`, a));
+  }
+  if (world.windows.length && Math.random() < 0.7) return stay(a, pick(world.windows), rand(2, 5), '🌤️', 'Looking out the window', () => log(`${a.name} is looking out the window`, a));
+  stay(a, world.randomNear(a.seat.x, a.seat.y, 6), rand(2, 4), '🚶', 'Stretching their legs', () => log(`${a.name} is stretching their legs`, a));
+}
+// a few free squares together: the meeting area if the map has one, else an open spot near the middle
+function meetingCells(n){
+  let pool = world.meetingZone ? world.zoneCells(world.meetingZone).filter(([x, y]) => !world.deskAtCell(x, y)) : [];
+  if (pool.length < n) {
+    const c = world.nearestFree(world.cols / 2 + rand(-4, 4), world.rows / 2 + rand(-3, 3));
+    if (!c) return null;
+    pool = [];
+    for (let y = c[1] - 2; y <= c[1] + 2; y++) for (let x = c[0] - 2; x <= c[0] + 2; x++) if (world.indoors(x, y) && !world.deskAtCell(x, y)) pool.push([x, y]);
+  }
+  if (pool.length < n) return null;
+  const mid = pick(pool);
+  return pool.sort((p, q) => Math.hypot(p[0] - mid[0], p[1] - mid[1]) - Math.hypot(q[0] - mid[0], q[1] - mid[1])).slice(0, n);
+}
+
+function update(dt){
+  const realNow = performance.now() / 1000;
+  for (const a of agents) {
+    if (a.state === 'walk') {
+      const sp = WALK[mode] * dt;
+      let left = sp;
+      while (left > 0 && a.path.length) {
+        const w = a.path[0], dx = w.x - a.x, dy = w.y - a.y, d = Math.hypot(dx, dy);
+        if (d <= left) { a.x = w.x; a.y = w.y; a.path.shift(); left -= d; }
+        else { a.x += dx / d * left; a.y += dy / d * left; left = 0; }
+      }
+      if (!a.path.length) arrive(a, realNow);
+    } else if (a.state === 'stay') {
+      if (simMin >= a.until && realNow >= a.minReal) {
+        if (a.with) { const b = a.with; if (b.with === a) { b.with = null; if (b.state === 'seat') { b.emoji = ''; b.what = 'At their desk'; } } a.with = null; }
+        if (!goHome(a)) sit(a);
+      }
+    } else if (!paused) think(a);
+  }
+  // anniversary confetti, now and then, on the day itself
+  for (const a of agents) if (a.party && a.party.days === 0 && a.state !== 'out' && Math.random() < dt / 12) confetti(a.x, a.y, 30);
+  for (const b of bits) { b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vy += 8 * dt; b.r += b.vr * dt; }
+  bits = bits.filter(b => b.t < b.life);
+}
+function arrive(a, realNow){
+  const t = a.then || { kind: 'seat' };
+  if (t.kind === 'seat') return sit(a);
+  if (t.kind === 'out') { a.state = 'out'; a.what = a.away === 'lunch' ? 'Out for lunch' : 'Gone home'; return; }
+  a.state = 'stay'; a.emoji = t.emoji; a.what = t.what;
+  a.until = simMin + t.minutes;
+  a.minReal = realNow + Math.max(3, Math.min(t.minutes / rate(), 30)) ;
+  if (t.onArrive) t.onArrive();
+}
+
+/* ---------- side panel ---------- */
+function log(text, a){
+  events.unshift({ at: simMin, text, ci: a ? a.ci : -1 });
+  events.length = Math.min(events.length, 8);
+  renderLog();
+}
+function renderLog(){
+  $('#log').innerHTML = events.length ? events.map(e => `<li><time>${hhmm(e.at)}</time><span>${esc(e.text)}</span></li>`).join('') : '<li class="empty">Quiet for now.</li>';
+}
+function renderSide(){
+  pal = readPal();
+  const col = p => F.teamColor(pal, world.colorIndex(p));
+  const when = d => d === 0 ? 'today' : d === 1 ? 'tomorrow' : d === -1 ? 'yesterday' : d > 0 ? `in ${d} days` : `${-d} days ago`;
+  const fmt = d => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const party = annList.filter(a => a.years >= 1 && a.days >= -7 && a.days <= 30).sort((a, b) => a.days - b.days);
+  const fresh = annList.filter(a => a.isNew).sort((a, b) => b.days - a.days);
+  const rows = [
+    ...party.map(a => `<li><span class="dot" style="background:${col(a.person)}"></span><span>${a.days >= -3 && a.days <= 3 ? '🎉 ' : ''}<b>${esc(a.person.name)}</b> <span class="chip${a.days > 3 ? ' soon' : ''}">${a.years} year${a.years > 1 ? 's' : ''}</span></span><span class="m">${fmt(a.date)}, ${when(a.days)}</span></li>`),
+    ...fresh.map(a => `<li><span class="dot" style="background:${col(a.person)}"></span><span>👋 <b>${esc(a.person.name)}</b></span><span class="m">New here: joined ${when(a.days)}</span></li>`)
+  ];
+  // never empty: with nothing this month, say who's next
+  if (!rows.length) {
+    const next = annList.filter(a => a.years >= 1 && a.days > 30).sort((a, b) => a.days - b.days)[0];
+    $('#ann').innerHTML = next ? `<p class="empty">Nothing this month. Next up: <b style="color:var(--ink)">${esc(next.person.name)}</b>, ${next.years} year${next.years > 1 ? 's' : ''} on ${fmt(next.date)}.</p>`
+      : `<p class="empty">Add start dates under People in the desk map to see work anniversaries here.</p>`;
+  } else $('#ann').innerHTML = `<ul class="list">${rows.join('')}</ul><p class="empty" style="margin-top:8px">People with an anniversary this week carry a 🎈 on the map.</p>`;
+  $('#teamTitle').textContent = world.colorField === 'team' || !world.colorField ? 'Teams' : 'Groups';
+  $('#teamPanel').hidden = !world.groupNames.length;
+  $('#legend').innerHTML = world.groupNames.map((g, i) => `<span><i style="background:${pal.team[i % 8]}"></i>${esc(g)}</span>`).join('');
+  renderLog();
+}
+
+/* ---------- drawing ---------- */
+function readPal(){
+  const p = F.palette(), cs = getComputedStyle(document.documentElement);
+  for (const k of ['coffee', 'night', 'lamp']) p[k] = cs.getPropertyValue('--' + k).trim();
+  return p;
+}
+function layout(){
+  if (!world) return;
+  const box = $('#stage').getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  S = Math.max(3, Math.min(box.width / world.cols, box.height / world.rows));
+  const w = Math.floor(world.cols * S), h = Math.floor(world.rows * S);
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  pal = readPal();
+  mapImg = document.createElement('canvas'); mapImg.width = cv.width; mapImg.height = cv.height;
+  const m = mapImg.getContext('2d');
+  m.setTransform(S * dpr, 0, 0, S * dpr, 0, 0);
+  const byDesk = new Map(agents.map(a => [a.desk.id, a]));
+  F.drawMap(m, world, pal, { deskColor: d => byDesk.has(d.id) ? byDesk.get(d.id).ci : -2, numbers: S >= 14 });
+}
+// how dark it is: 0 in the day, up to about 0.5 at night
+function darkness(t){
+  const dawn = 7 * 60 + 30, dusk = 18 * 60 + 30;
+  if (t >= dawn + 45 && t <= dusk) return 0;
+  if (t > dusk) return Math.min(1, (t - dusk) / 60) * 0.5;
+  if (t < dawn) return 0.5;
+  return (1 - (t - dawn) / 45) * 0.5;
+}
+function render(now){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!world || !mapImg) return;
+  ctx.drawImage(mapImg, 0, 0);
+  ctx.setTransform(S * dpr, 0, 0, S * dpr, 0, 0);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  if (world.coffee) {
+    const [cx, cy] = world.coffee.cell;
+    ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.coffee; ctx.lineWidth = 0.07;
+    ctx.beginPath(); ctx.roundRect(cx + 0.1, cy + 0.1, 0.8, 0.8, 0.18); ctx.fill(); ctx.stroke();
+    ctx.font = `0.55px ${EMOJI}`; ctx.fillText('☕', cx + 0.5, cy + 0.53);
+  }
+  const dark = darkness(simMin);
+  if (dark > 0) {
+    ctx.globalAlpha = dark; ctx.fillStyle = pal.night; ctx.fillRect(0, 0, world.cols, world.rows); ctx.globalAlpha = 1;
+    // desk lamps for whoever is still in
+    ctx.globalCompositeOperation = 'lighter';
+    for (const a of agents) if (a.state === 'seat') {
+      const g = ctx.createRadialGradient(a.desk.cx, a.desk.cy, 0, a.desk.cx, a.desk.cy, 3);
+      g.addColorStop(0, pal.lamp); g.addColorStop(1, 'transparent');
+      ctx.globalAlpha = dark * 0.5; ctx.fillStyle = g; ctx.fillRect(a.desk.cx - 3, a.desk.cy - 3, 6, 6);
+    }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
+
+  for (const a of agents) {
+    if (a.state === 'out') continue;
+    const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
+    ctx.globalAlpha = 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(a.x, a.y + 0.28, 0.3, 0.12, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = F.teamColor(pal, a.ci); ctx.strokeStyle = pal.sheet; ctx.lineWidth = 0.08;
+    ctx.beginPath(); ctx.arc(x, y, 0.36, 0, 7); ctx.fill(); ctx.stroke();
+    if (S >= 18) { ctx.fillStyle = pal.sheet; ctx.font = '700 0.3px "Barlow", sans-serif'; ctx.fillText(a.ini, x, y + 0.01); }
+    if (a.party) { ctx.font = `0.48px ${EMOJI}`; ctx.fillText('🎈', x + 0.36, y - 0.5 + Math.sin(now * 2 + a.phase) * 0.05); }
+    if (a.emoji && (a.state === 'stay' || a.with)) {
+      if (a.emoji === '💬') {
+        // three dots that take turns
+        ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.line; ctx.lineWidth = 0.04;
+        ctx.beginPath(); ctx.roundRect(x - 0.42, y - 1.02, 0.84, 0.42, 0.18); ctx.fill(); ctx.stroke();
+        for (let k = 0; k < 3; k++) { ctx.fillStyle = pal.muted; ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(now * 5 - k * 0.9 + a.phase)); ctx.beginPath(); ctx.arc(x - 0.2 + k * 0.2, y - 0.81, 0.06, 0, 7); ctx.fill(); }
+        ctx.globalAlpha = 1;
+      } else { ctx.font = `0.48px ${EMOJI}`; ctx.fillText(a.emoji, x, y - 0.78); }
+    }
+  }
+  for (const b of bits) { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.globalAlpha = 1 - b.t / b.life; ctx.fillStyle = b.c; ctx.fillRect(-0.08, -0.04, 0.16, 0.08); ctx.restore(); }
+  ctx.globalAlpha = 1;
+
+  const quiet = agents.length && agents.every(a => a.state === 'out');
+  if (quiet) {
+    ctx.fillStyle = pal.muted; ctx.font = '700 1.1px "Barlow Condensed", sans-serif';
+    ctx.fillText(weekend() ? 'It’s the weekend. See you Monday.' : simMin < 12 * 60 ? 'Nobody’s in yet.' : 'Everyone has gone home.', world.cols / 2, world.rows / 2);
+  }
+}
+function confetti(x, y, n){
+  for (let i = 0; i < n; i++) {
+    const a = rand(-Math.PI, 0), v = rand(2, 5);
+    bits.push({ x, y: y - 0.3, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1.5, r: rand(0, 6), vr: rand(-12, 12), t: 0, life: rand(0.8, 1.5), c: pal.team[i % 8] });
+  }
+}
+
+/* ---------- header ---------- */
+let shownTime = '';
+function renderClock(){
+  const t = hhmm(simMin);
+  if (t !== shownTime) {
+    shownTime = t; $('#time').textContent = t;
+    const inn = agents.filter(a => a.state !== 'out').length;
+    $('#day').textContent = `${mode === 'live' ? new Date().toLocaleDateString(undefined, { weekday: 'long' }) : 'Day ' + (simDay + 1)} · ${inn} of ${agents.length} in`;
+  }
+}
+function renderControls(){
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  const pb = $('#playBtn');
+  pb.innerHTML = paused ? '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>' : '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>';
+  pb.setAttribute('aria-label', paused ? 'Play' : 'Pause'); pb.title = paused ? 'Play (Space)' : 'Pause (Space)';
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+  if (mode === b.dataset.mode) return;
+  mode = b.dataset.mode; lsSet('office-life:mode', mode);
+  if (mode === 'fast') fastClock = clamp(simMin, DAY_START, DAY_END - 1);
+  shownTime = ''; newDay(true); events = []; renderLog(); renderControls();
+}));
+$('#playBtn').addEventListener('click', () => { paused = !paused; renderControls(); });
+const sideKey = 'office-life:side';
+function setSide(show){ $('#main').classList.toggle('wide', !show); lsSet(sideKey, show ? '1' : '0'); requestAnimationFrame(layout); }
+$('#sideBtn').addEventListener('click', () => setSide($('#main').classList.contains('wide')));
+$('#fullBtn').addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.().catch(() => {}));
+$('#openBtn').addEventListener('click', () => $('#fileIn').click());
+$('#fileIn').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try { setMap(await F.readFile(f), 'file', f.name); } catch (err) { alert(err.message); }
+});
+addEventListener('keydown', e => {
+  if (e.target.closest?.('input,textarea,select,button')) return;
+  if (e.code === 'Space') { paused = !paused; renderControls(); e.preventDefault(); }
+  else if (e.code === 'KeyF') $('#fullBtn').click();
+  else if (e.code === 'KeyH') $('#sideBtn').click();
+});
+
+// hover (or tap) a person to see who it is and what they're up to
+function showTip(e){
+  if (!world) return;
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / S, y = (e.clientY - r.top) / S;
+  let best = null, bd = 0.7;
+  for (const a of agents) if (a.state !== 'out') { const d = Math.hypot(a.x - x, a.y - y); if (d < bd) { bd = d; best = a; } }
+  const tip = $('#tip');
+  if (!best) { tip.hidden = true; return; }
+  const party = best.party ? `<div>🎈 ${best.party.years} year${best.party.years > 1 ? 's' : ''} here ${best.party.days === 0 ? 'today' : 'this week'}</div>` : '';
+  tip.innerHTML = `<b>${esc(best.person.name || best.name)}</b><div class="m">${esc([best.team, 'desk ' + best.desk.number].filter(Boolean).join(' · '))}</div><div>${esc(best.what)}</div>${party}`;
+  tip.hidden = false;
+  const sr = $('#stage').getBoundingClientRect();
+  const left = clamp(e.clientX - sr.left + 14, 4, sr.width - tip.offsetWidth - 4), top = clamp(e.clientY - sr.top + 14, 4, sr.height - tip.offsetHeight - 4);
+  tip.style.left = left + 'px'; tip.style.top = top + 'px';
+}
+cv.addEventListener('pointermove', showTip);
+cv.addEventListener('pointerdown', showTip);
+cv.addEventListener('pointerleave', () => { $('#tip').hidden = true; });
+
+let resizeT;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(layout, 80); });
+document.addEventListener('fullscreenchange', () => setTimeout(layout, 50));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { layout(); renderSide(); });
+
+let last = performance.now();
+function frame(t){
+  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  if (world) {
+    tickClock(dt);
+    if (!paused) update(dt);
+    render(t / 1000);
+    renderClock();
+  }
+  requestAnimationFrame(frame);
+}
+
+(async () => {
+  if (lsGet(sideKey) === '0') $('#main').classList.add('wide');
+  renderControls();
+  const { data, source } = await F.load();
+  try { await document.fonts.ready; } catch {}
+  setMap(data, source);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

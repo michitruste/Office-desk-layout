@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Coffee Run</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Same tokens as index.html, so the game looks like the map it's played on. */
+:root{
+  --paper:#eceff0; --sheet:#f7f9f9; --surface:#ffffff; --ink:#1a2529; --muted:#5b6a6f;
+  --line:#d3dbdd; --line-strong:#9aa8ad; --grid:#e2e8ea; --grid-major:#d2dadd;
+  --accent:#2453a6; --accent-ink:#ffffff; --accent-soft:#e3ebf8;
+  --danger:#b23a2e; --danger-soft:#fbe9e6; --ok:#2c7650; --ok-soft:#e2f2e9; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --shadow:rgba(20,35,45,.16); --scrim:rgba(18,26,30,.45);
+  --t0:#c4561c; --t1:#2c7a4e; --t2:#7a49b3; --t3:#0e7b8a; --t4:#b52f6b; --t5:#8c6a0f; --t6:#3a5fc6; --t7:#5f7322;
+  --coffee:#7a4a24;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111719; --sheet:#161e21; --surface:#1d272b; --ink:#e4ecee; --muted:#9aabb0;
+    --line:#2e3b40; --line-strong:#5d6f75; --grid:#1d272a; --grid-major:#263337;
+    --accent:#7da4ec; --accent-ink:#0d1a30; --accent-soft:#1f2c44;
+    --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
+    --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
+    --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
+    --coffee:#d7a374;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111719; --sheet:#161e21; --surface:#1d272b; --ink:#e4ecee; --muted:#9aabb0;
+  --line:#2e3b40; --line-strong:#5d6f75; --grid:#1d272a; --grid-major:#263337;
+  --accent:#7da4ec; --accent-ink:#0d1a30; --accent-soft:#1f2c44;
+  --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
+  --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
+  --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
+  --coffee:#d7a374;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+.app{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;gap:10px;padding:12px max(16px, env(safe-area-inset-left, 0px)) 16px max(16px, env(safe-area-inset-right, 0px))}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.brand{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:0;max-width:100%}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:28px;line-height:1;margin:0}
+.brand .src{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hud{display:flex;flex-wrap:wrap;gap:6px}
+.stat{display:flex;flex-direction:column;align-items:flex-start;padding:5px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:62px}
+.stat .k{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stat .v{font-family:var(--f-mono);font-weight:600;font-size:15px;font-variant-numeric:tabular-nums;line-height:1.3;white-space:nowrap}
+.stat.level .v{font-family:var(--f-display);font-size:17px;line-height:1.2}
+.pips{display:flex;gap:4px;align-items:center;height:19.5px}
+.pip{width:11px;height:11px;border-radius:50%;border:2px solid var(--coffee)}
+.pip.on{background:var(--coffee)}
+.pip.life{border-color:var(--ok);background:var(--ok)}
+.pip.miss{border-color:var(--danger);background:none}
+.actions{display:flex;gap:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;line-height:1.2;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:var(--line-strong)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.big{padding:11px 20px;font-size:16px}
+.btn svg{width:16px;height:16px;flex:none}
+
+.stage{position:relative;display:grid;place-items:center;min-height:0;min-width:0;overflow:hidden}
+canvas{display:block;border-radius:10px;box-shadow:0 1px 0 var(--line),0 6px 24px -14px var(--shadow);touch-action:none;cursor:crosshair}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:var(--scrim);border-radius:10px;padding:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 16px 48px -20px var(--shadow);padding:24px 26px;max-width:460px;width:100%;max-height:100%;overflow:auto}
+.card h2{font-family:var(--f-display);font-weight:700;font-size:34px;line-height:1;margin:0 0 8px}
+.card p{margin:0 0 12px}
+.card .muted{color:var(--muted)}
+.card .sm{font-size:13.5px}
+.card .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:14px 0 4px;font-size:14px;align-items:center}
+kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--paper);white-space:nowrap}
+.big-score{font-family:var(--f-mono);font-weight:600;font-size:44px;line-height:1.1;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--ok-soft);color:var(--ok);vertical-align:middle;margin-left:8px}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 4px}
+.facts div{border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.facts b{display:block;font-family:var(--f-mono);font-size:17px}
+.facts span{font-size:12px;color:var(--muted)}
+.note{font-size:13.5px;padding:8px 11px;border-radius:8px;background:var(--warn-soft);color:var(--warn);margin:10px 0 0}
+@media (max-width:640px){
+  .brand h1{font-size:24px}
+  .stat{padding:4px 8px;min-width:0}
+  .card{padding:20px}
+  .card h2{font-size:28px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <h1>Coffee Run</h1>
+      <div class="src" id="src">Loading the map…</div>
+    </div>
+    <div class="hud" aria-live="off">
+      <div class="stat"><span class="k">Score</span><span class="v" id="hScore">0</span></div>
+      <div class="stat"><span class="k">Streak</span><span class="v" id="hCombo">×1</span></div>
+      <div class="stat"><span class="k">Tray</span><span class="pips" id="hTray"></span></div>
+      <div class="stat"><span class="k">Patience</span><span class="pips" id="hLives"></span></div>
+      <div class="stat level"><span class="k">Level <span id="hLevelN">1</span></span><span class="v" id="hLevel">Quiet morning</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="pauseBtn" type="button" title="Pause (P)" aria-label="Pause"><svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg></button>
+      <button class="btn" id="soundBtn" type="button" aria-pressed="false" title="Sound">Sound off</button>
+      <a class="btn" href="index.html">Desk map</a>
+    </div>
+  </header>
+  <main class="stage" id="stage">
+    <canvas id="cv" aria-label="The office floor plan"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="card" id="card"></div>
+    </div>
+  </main>
+</div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script src="fun-map.js"></script>
+<script>
+'use strict';
+const F = window.FunMap;
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const EMOJI = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+
+/* ---------- tuning ---------- */
+const R = 0.38;             // you, in squares (a square is about 40 cm)
+const SPEED = 6;            // squares a second
+const TRAY = 3;             // cups you can carry
+const LIVES = 3;            // orders people can give up on before the shift ends
+const PER_LEVEL = 6;        // deliveries to go up a level
+const LEVELS = ['Quiet morning', 'After stand-up', 'Mid-morning slump', 'Lunch rush', 'Afternoon crunch', 'Deadline day', 'Quarter end'];
+const DRINKS = [['☕', 'Espresso'], ['☕', 'Latte'], ['☕', 'Flat white'], ['☕', 'Cappuccino'], ['🍵', 'Tea'], ['🍫', 'Hot chocolate'], ['🧋', 'Iced coffee'], ['☕', 'Americano']];
+const THANKS = ['Thanks!', 'Lifesaver!', 'Perfect timing', 'You’re a star', '¡Gracias!', 'Just what I needed', 'Merci!', 'Legend'];
+const GAVE_UP = ['gave up waiting', 'went to get it themselves', 'is a bit grumpy now', 'switched to water'];
+const CHATTER = ['“Got a sec?”', '“Quick question…”', '“Did you see that email?”', '“So, about that meeting…”', '“How was your weekend?”', '“Have you tried turning it off and on?”'];
+
+/* ---------- state ---------- */
+let world = null, customers = [], byDesk = new Map(), source = { label: '' };
+let pal, S = 20, dpr = 1, mapImg = null;
+let g = null, phase = 'loading';
+let sound = false, audio = null;
+const keys = new Set();
+const pointer = { down: false, x: 0, y: 0, lastRoute: 0 };
+
+function bestScore(){ try { return +localStorage.getItem('coffee-run:best') || 0; } catch { return 0; } }
+function saveBest(v){ try { localStorage.setItem('coffee-run:best', String(v)); } catch {} }
+try { sound = localStorage.getItem('coffee-run:sound') === '1'; } catch {}
+
+/* ---------- the map ---------- */
+function setMap(data, src, fileName){
+  world = F.build(data);
+  source = { src, label: F.sourceLabel(src, fileName) };
+  const ann = new Map(F.anniversaries(world.seated.map(s => s.person)).map(a => [a.person, a]));
+  customers = world.seated.map(s => {
+    const a = ann.get(s.person);
+    return { ...s, seat: s.desk.seat, ci: world.colorIndex(s.person), name: F.shortName(s.person.name) || 'Desk ' + s.desk.number,
+      ini: F.initials(s.person.name || String(s.desk.number)), party: a && F.celebrating(a) ? a.years : 0, isNew: !!a?.isNew,
+      order: null, busy: false, lastAt: -99, served: 0 };
+  });
+  byDesk = new Map(customers.map(c => [c.desk.id, c]));
+  $('#src').textContent = source.label;
+  g = newGame();
+  layout();
+  showStart();
+}
+const playable = () => world && world.coffee && customers.length > 0;
+
+function layout(){
+  if (!world) return;
+  const box = $('#stage').getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  S = Math.max(3, Math.min(box.width / world.cols, box.height / world.rows));
+  const w = Math.floor(world.cols * S), h = Math.floor(world.rows * S);
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  pal = F.palette();
+  mapImg = document.createElement('canvas');
+  mapImg.width = cv.width; mapImg.height = cv.height;
+  const m = mapImg.getContext('2d');
+  m.setTransform(S * dpr, 0, 0, S * dpr, 0, 0);
+  F.drawMap(m, world, pal, { deskColor: d => byDesk.has(d.id) ? byDesk.get(d.id).ci : -2, numbers: S >= 14 });
+  pal.coffee = getComputedStyle(document.documentElement).getPropertyValue('--coffee').trim();
+}
+
+/* ---------- a shift ---------- */
+function newGame(){
+  const c = world.coffee ? world.coffee.cell : world.entrance || [1, 1];
+  customers.forEach(k => { k.order = null; k.busy = false; k.lastAt = -99; k.served = 0; });
+  return { time: 0, score: 0, streak: 0, bestStreak: 0, delivered: 0, missed: 0, level: 1, cups: 0, stun: 0,
+    p: { x: c[0] + 0.5, y: c[1] + 1.4, face: Math.PI / 2, moving: false, still: 0 }, route: null, target: null,
+    nextOrder: 1.2, orders: [], npcs: [], floaters: [], bits: [], brewFx: 0, shake: 0 };
+}
+function start(){
+  if (!playable()) return;
+  g = newGame();
+  // start right next to the coffee machine, on a free square
+  const c = world.coffee.cell, s = world.nearestFree(c[0] + 0.5, c[1] + 2) || c;
+  g.p.x = s[0] + 0.5; g.p.y = s[1] + 0.5;
+  phase = 'play'; hideOverlay(); hud(); blip('start');
+  cv.focus?.();
+}
+function levelName(n){ return n <= LEVELS.length ? LEVELS[n - 1] : LEVELS[LEVELS.length - 1] + ' ×' + (n - LEVELS.length + 1); }
+
+function update(dt){
+  g.time += dt;
+  const p = g.p;
+
+  // walking: keys first, otherwise follow the route to where you clicked
+  let mx = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), my = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0);
+  if (mx || my) { g.route = null; g.target = null; }
+  if (pointer.down && g.time - pointer.lastRoute > 0.15) { routeTo(pointer.x, pointer.y); pointer.lastRoute = g.time; }
+  let vx = 0, vy = 0;
+  if (g.stun > 0) g.stun -= dt;
+  else if (mx || my) { const l = Math.hypot(mx, my); vx = mx / l * SPEED; vy = my / l * SPEED; }
+  else if (g.route?.length) {
+    const w = g.route[0], dx = w.x - p.x, dy = w.y - p.y, d = Math.hypot(dx, dy);
+    if (d < 0.12) { g.route.shift(); if (!g.route.length) { g.route = null; g.target = null; } }
+    else { const s = Math.min(SPEED, d / dt); vx = dx / d * s; vy = dy / d * s; }
+  }
+  const bx = p.x, by = p.y;
+  move(p, vx * dt, vy * dt, R);
+  const moved = Math.hypot(p.x - bx, p.y - by);
+  p.moving = moved > 0.002;
+  if (vx || vy) p.face = Math.atan2(vy, vx);
+  // stuck on a corner while following a route: plan it again
+  if (g.route && moved < SPEED * dt * 0.2) { p.still += dt; if (p.still > 0.4 && g.target) { routeTo(g.target.x, g.target.y); p.still = 0; } } else p.still = 0;
+
+  // the coffee machine fills your tray
+  const c = world.coffee.cell, cd = Math.hypot(p.x - (c[0] + 0.5), p.y - (c[1] + 0.5));
+  if (cd < 1.35 && g.cups < TRAY) {
+    const n = TRAY - g.cups; g.cups = TRAY; g.brewFx = 0.6;
+    float(c[0] + 0.5, c[1] - 0.3, `+${n} ☕`, pal.coffee); blip('pick'); hud();
+  }
+  if (g.brewFx > 0) g.brewFx -= dt;
+
+  // handing over a cup
+  if (g.cups > 0) for (const o of g.orders) {
+    if (o.done) continue;
+    const s = o.c.seat;
+    if (Math.hypot(p.x - s.x, p.y - s.y) < 1.2 || nearDesk(p, o.c.desk, R + 0.4)) deliver(o);
+    if (!g.cups) break;
+  }
+
+  // waiting runs out
+  for (const o of g.orders) {
+    if (o.done) continue;
+    o.left -= dt;
+    if (o.left <= 0) miss(o);
+  }
+  g.orders = g.orders.filter(o => !o.done);
+  if (phase !== 'play') return;
+
+  // new orders
+  g.nextOrder -= dt;
+  const maxOpen = Math.min(customers.length, 1 + g.level, 7);
+  if (g.nextOrder <= 0) {
+    if (g.orders.length < maxOpen) spawnOrder();
+    g.nextOrder = Math.max(1.1, 4.4 - 0.45 * (g.level - 1)) * rand(0.75, 1.25);
+  }
+
+  // chatty colleagues from level 3
+  const wantNpcs = g.level >= 5 ? 2 : g.level >= 3 ? 1 : 0;
+  if (g.npcs.length < Math.min(wantNpcs, Math.floor(customers.length / 3))) addNpc();
+  for (const n of g.npcs) updateNpc(n, dt);
+  g.npcs = g.npcs.filter(n => !n.gone);
+
+  for (const f of g.floaters) f.t += dt;
+  g.floaters = g.floaters.filter(f => f.t < f.life);
+  for (const b of g.bits) { b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vy += 9 * dt; b.r += b.vr * dt; }
+  g.bits = g.bits.filter(b => b.t < b.life);
+  if (g.shake > 0) g.shake -= dt;
+}
+function nearDesk(p, d, r){ return d.cells.some(([x, y]) => Math.hypot(p.x - clamp(p.x, x, x + 1), p.y - clamp(p.y, y, y + 1)) < r); }
+
+function spawnOrder(){
+  const free = customers.filter(c => !c.order && !c.busy && g.time - c.lastAt > 6);
+  if (!free.length) return;
+  const c = pick(free), cc = world.coffee.cell;
+  const dist = world.distance(c.seat.cx, c.seat.cy, cc[0], cc[1]);
+  const fac = Math.max(0.5, 1 - 0.08 * (g.level - 1));
+  const life = (5 + (isFinite(dist) ? dist : 20) / SPEED * 2.6) * fac + 3 + (c.party ? 2 : 0);
+  const [emoji, drink] = c.party ? ['🎂', 'Cake'] : pick(DRINKS);
+  const o = { c, emoji, drink, life, left: life, born: g.time, done: false };
+  c.order = o; g.orders.push(o);
+  blip('order');
+}
+function deliver(o){
+  const frac = clamp(o.left / o.life, 0, 1);
+  g.cups--; g.streak++; g.bestStreak = Math.max(g.bestStreak, g.streak); g.delivered++;
+  const mult = Math.min(5, 1 + Math.floor((g.streak - 1) / 2));
+  const pts = Math.round((50 + 100 * frac) * mult * (o.c.party ? 2 : 1) / 5) * 5;
+  g.score += pts;
+  o.done = true; o.c.order = null; o.c.lastAt = g.time; o.c.served++;
+  const s = o.c.seat;
+  float(s.x, s.y - 1.1, `+${pts}`, pal.ok, 1.1, true);
+  float(s.x, s.y - 0.4, o.c.party ? `🎉 ${o.c.party} year${o.c.party > 1 ? 's' : ''}!` : pick(THANKS), pal.ink, 1.3);
+  if (o.c.party || frac > 0.6) confetti(s.x, s.y, o.c.party ? 40 : 14);
+  if (g.delivered % PER_LEVEL === 0) {
+    g.level++;
+    float(world.cols / 2, world.rows / 2, `Level ${g.level}: ${levelName(g.level)}`, pal.accent, 2.2, true, 1.2);
+    blip('level');
+  } else blip('deliver');
+  hud();
+}
+function miss(o){
+  o.done = true; o.c.order = null; o.c.lastAt = g.time;
+  g.missed++; g.streak = 0; g.shake = 0.3;
+  float(o.c.seat.x, o.c.seat.y - 0.6, `${o.c.name} ${pick(GAVE_UP)}`, pal.danger, 1.8);
+  blip('miss'); hud();
+  if (g.missed >= LIVES) gameOver();
+}
+function gameOver(){
+  phase = 'over';
+  const prev = bestScore(), isBest = g.score > prev;
+  if (isBest) saveBest(g.score);
+  const fan = [...customers].sort((a, b) => b.served - a.served)[0];
+  showCard(`
+    <h2>Shift over</h2>
+    <div class="big-score">${g.score.toLocaleString()}${isBest && g.score ? '<span class="badge">New best</span>' : ''}</div>
+    <p class="muted sm">${isBest || !prev ? '' : `Best so far: ${prev.toLocaleString()}`}</p>
+    <div class="facts">
+      <div><b>${g.delivered}</b><span>cups delivered</span></div>
+      <div><b>×${g.bestStreak}</b><span>longest streak</span></div>
+      <div><b>${g.level}</b><span>level reached</span></div>
+    </div>
+    ${fan && fan.served > 1 ? `<p class="sm">Biggest fan of your coffee: <b>${esc(fan.name)}</b>, ${fan.served} cups.</p>` : ''}
+    <div class="row"><button class="btn primary big" data-act="start" type="button">Play again</button></div>`);
+  blip('over');
+}
+
+/* moving a circle around desks, pillars and walls, a little at a time so thin walls can't be skipped */
+function move(p, dx, dy, r){
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 0.12));
+  for (let i = 0; i < steps; i++) { p.x += dx / steps; p.y += dy / steps; collide(p, r); }
+}
+function collide(p, r){
+  for (let it = 0; it < 3; it++) {
+    for (let y = Math.floor(p.y - r) - 1; y <= Math.floor(p.y + r) + 1; y++)
+      for (let x = Math.floor(p.x - r) - 1; x <= Math.floor(p.x + r) + 1; x++)
+        if (world.isBlocked(x, y)) push(p, x, y, 1, 1, r);
+    for (const w of world.wallRects) if (p.x + r > w.x && p.x - r < w.x + w.w && p.y + r > w.y && p.y - r < w.y + w.h) push(p, w.x, w.y, w.w, w.h, r);
+  }
+}
+function push(p, x, y, w, h, r){
+  const qx = clamp(p.x, x, x + w), qy = clamp(p.y, y, y + h), dx = p.x - qx, dy = p.y - qy, d2 = dx * dx + dy * dy;
+  if (d2 >= r * r) return;
+  if (d2 > 1e-10) { const d = Math.sqrt(d2), k = (r - d) / d; p.x += dx * k; p.y += dy * k; return; }
+  const l = p.x - x, rr = x + w - p.x, t = p.y - y, b = y + h - p.y, m = Math.min(l, rr, t, b);
+  if (m === l) p.x = x - r; else if (m === rr) p.x = x + w + r; else if (m === t) p.y = y - r; else p.y = y + h + r;
+}
+function routeTo(x, y){
+  const t = world.nearestFree(x, y);
+  if (!t) return;
+  const r = world.route(g.p.x, g.p.y, t[0], t[1]);
+  if (!r) return;
+  // finish on the exact spot clicked when it's open floor
+  if (world.onFloor(Math.floor(x), Math.floor(y)) && r.length) r[r.length - 1] = { x, y };
+  g.route = r; g.target = { x, y };
+}
+
+/* ---------- chatty colleagues: bump into one and you're stuck talking for a moment ---------- */
+function addNpc(){
+  const free = customers.filter(c => !c.order && !c.busy);
+  if (!free.length) return;
+  const c = pick(free);
+  c.busy = true;
+  g.npcs.push({ c, x: c.seat.x, y: c.seat.y, route: null, wait: rand(0.5, 1.5), until: g.time + rand(18, 30), cool: 2, home: false, gone: false, talk: 0, line: '' });
+}
+function updateNpc(n, dt){
+  n.cool -= dt;
+  if (n.talk > 0) { n.talk -= dt; return; }
+  if (n.wait > 0) { n.wait -= dt; return; }
+  if (!n.route?.length) {
+    if (n.home) { n.gone = true; n.c.busy = false; n.c.lastAt = g.time; return; }
+    if (g.time > n.until) { n.home = true; n.route = world.route(n.x, n.y, n.c.seat.cx, n.c.seat.cy) || []; if (!n.route.length) { n.gone = true; n.c.busy = false; } return; }
+    const t = world.randomNear(n.x, n.y, 9);
+    n.route = t ? world.route(n.x, n.y, t[0], t[1]) : null;
+    if (!n.route) n.wait = 1;
+    return;
+  }
+  const w = n.route[0], dx = w.x - n.x, dy = w.y - n.y, d = Math.hypot(dx, dy), sp = 2.3;
+  if (d < 0.1) { n.route.shift(); if (!n.route.length && !n.home) n.wait = rand(0.6, 2); return; }
+  const s = Math.min(sp * dt, d); n.x += dx / d * s; n.y += dy / d * s;
+  if (n.cool <= 0 && g.stun <= 0 && Math.hypot(n.x - g.p.x, n.y - g.p.y) < R * 2 + 0.1) {
+    g.stun = 1.3; n.talk = 1.3; n.cool = 6; n.line = pick(CHATTER);
+    float(n.x, n.y - 0.9, `${n.c.name}: ${n.line}`, pal.muted, 1.6);
+    blip('stun');
+  }
+}
+
+/* ---------- little effects ---------- */
+function float(x, y, text, color, life = 1.2, bold = false, size = 0.62){ g.floaters.push({ x, y, text, color, life, bold, size, t: 0 }); }
+function confetti(x, y, n){
+  for (let i = 0; i < n; i++) {
+    const a = rand(-Math.PI, 0), v = rand(2, 6);
+    g.bits.push({ x, y: y - 0.3, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 2, r: rand(0, 6), vr: rand(-12, 12), t: 0, life: rand(0.7, 1.3), c: pal.team[i % 8] });
+  }
+}
+function blip(kind){
+  if (!sound) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = { start: [523, 659, 784], pick: [660, 880], order: [990], deliver: [784, 1047], level: [523, 659, 784, 1047], miss: [220, 165], stun: [330, 294], over: [392, 330, 262] }[kind] || [440];
+    notes.forEach((f, i) => {
+      const o = audio.createOscillator(), v = audio.createGain(), t = audio.currentTime + i * 0.08;
+      o.type = kind === 'miss' || kind === 'over' ? 'triangle' : 'sine'; o.frequency.value = f;
+      v.gain.setValueAtTime(0.0001, t); v.gain.exponentialRampToValueAtTime(0.07, t + 0.01); v.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(v).connect(audio.destination); o.start(t); o.stop(t + 0.18);
+    });
+  } catch {}
+}
+
+/* ---------- drawing ---------- */
+function render(now){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!world || !mapImg) return;
+  const sh = g.shake > 0 ? g.shake * 8 * dpr : 0;
+  ctx.drawImage(mapImg, sh ? rand(-sh, sh) : 0, 0);
+  ctx.setTransform(S * dpr, 0, 0, S * dpr, sh ? rand(-sh, sh) : 0, 0);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const showText = S >= 11;
+
+  drawCoffee(now);
+  if (g.target && g.route) { ctx.strokeStyle = pal.accent; ctx.globalAlpha = 0.6; ctx.lineWidth = 0.06; ctx.beginPath(); ctx.arc(g.target.x, g.target.y, 0.3 + 0.06 * Math.sin(now * 8), 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+
+  for (const c of customers) if (!c.busy) person(c.seat.x, c.seat.y, c, 0, showText);
+  for (const n of g.npcs) person(n.x, n.y, n.c, Math.sin(now * 10 + n.x) * 0.04, showText, n.talk > 0 ? '💬' : '');
+  // orders: a ring that empties as people lose patience, and a bubble saying what they want
+  for (const o of g.orders) {
+    const s = o.c.seat, f = clamp(o.left / o.life, 0, 1), col = f > 0.5 ? pal.ok : f > 0.25 ? pal.warn : pal.danger;
+    const pulse = f < 0.25 ? 0.06 * Math.sin(now * 14) : 0;
+    ctx.lineWidth = 0.12; ctx.strokeStyle = pal.line; ctx.beginPath(); ctx.arc(s.x, s.y, 0.62 + pulse, 0, 7); ctx.stroke();
+    ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(s.x, s.y, 0.62 + pulse, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2); ctx.stroke();
+    bubble(s.x, s.y - 1.25 + Math.sin(now * 3 + s.x) * 0.05, showText ? `${o.emoji} ${o.c.name}` : o.emoji, col, showText ? `${o.drink}${o.c.party ? ' · anniversary!' : ''}` : '');
+  }
+  drawPlayer(now);
+
+  for (const b of g.bits) { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.globalAlpha = 1 - b.t / b.life; ctx.fillStyle = b.c; ctx.fillRect(-0.09, -0.05, 0.18, 0.1); ctx.restore(); }
+  ctx.globalAlpha = 1;
+  for (const f of g.floaters) {
+    const k = f.t / f.life;
+    ctx.globalAlpha = k < 0.75 ? 1 : 1 - (k - 0.75) / 0.25;
+    ctx.font = `${f.bold ? 700 : 600} ${f.size}px ${f.bold ? '"JetBrains Mono", monospace' : '"Barlow", ' + EMOJI}`;
+    const x = clamp(f.x, 2, world.cols - 2), y = f.y - k * 1.1;
+    ctx.lineWidth = 0.16; ctx.strokeStyle = pal.sheet; ctx.lineJoin = 'round'; ctx.strokeText(f.text, x, y);
+    ctx.fillStyle = f.color; ctx.fillText(f.text, x, y);
+  }
+  ctx.globalAlpha = 1;
+}
+function person(x, y, c, bob, showText, mark){
+  const col = F.teamColor(pal, c.ci);
+  ctx.fillStyle = col; ctx.strokeStyle = pal.sheet; ctx.lineWidth = 0.08;
+  ctx.beginPath(); ctx.arc(x, y + bob, 0.36, 0, 7); ctx.fill(); ctx.stroke();
+  if (showText && S >= 18) { ctx.fillStyle = pal.sheet; ctx.font = '700 0.3px "Barlow", sans-serif'; ctx.fillText(c.ini, x, y + bob + 0.01); }
+  if (c.party) { ctx.font = `0.5px ${EMOJI}`; ctx.fillText('🎈', x + 0.38, y - 0.45 + bob); }
+  if (mark) { ctx.font = `0.55px ${EMOJI}`; ctx.fillText(mark, x + 0.35, y - 0.55); }
+}
+function bubble(x, y, text, edge, sub){
+  ctx.font = `600 0.5px "Barlow", ${EMOJI}`;
+  let w = ctx.measureText(text).width;
+  if (sub) { ctx.font = '500 0.38px "Barlow", sans-serif'; w = Math.max(w, ctx.measureText(sub).width); }
+  const pw = w + 0.5, ph = sub ? 1.05 : 0.7;
+  x = clamp(x, pw / 2 + 0.1, world.cols - pw / 2 - 0.1); y = Math.max(ph / 2 + 0.1, y);
+  ctx.fillStyle = pal.surface; ctx.strokeStyle = edge; ctx.lineWidth = 0.06;
+  ctx.beginPath(); ctx.roundRect(x - pw / 2, y - ph / 2, pw, ph, 0.22); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = pal.ink; ctx.font = `600 0.5px "Barlow", ${EMOJI}`;
+  ctx.fillText(text, x, sub ? y - 0.17 : y + 0.02);
+  if (sub) { ctx.fillStyle = pal.muted; ctx.font = '500 0.38px "Barlow", sans-serif'; ctx.fillText(sub, x, y + 0.27); }
+}
+function drawCoffee(now){
+  const [cx, cy] = world.coffee.cell, x = cx + 0.5, y = cy + 0.5;
+  ctx.globalAlpha = 0.16 + (g.brewFx > 0 ? 0.2 : 0); ctx.fillStyle = pal.coffee;
+  ctx.beginPath(); ctx.arc(x, y, 1.35, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.coffee; ctx.lineWidth = 0.09;
+  ctx.beginPath(); ctx.roundRect(x - 0.62, y - 0.62, 1.24, 1.24, 0.25); ctx.fill(); ctx.stroke();
+  ctx.font = `0.8px ${EMOJI}`; ctx.fillText('☕', x, y + 0.04);
+  // steam
+  ctx.strokeStyle = pal.coffee; ctx.lineWidth = 0.05; ctx.globalAlpha = 0.55;
+  for (let i = -1; i <= 1; i++) {
+    const ph = (now * 0.8 + i * 0.33) % 1;
+    ctx.beginPath();
+    for (let k = 0; k <= 8; k++) { const t = k / 8, yy = y - 0.75 - t * 0.7 - ph * 0.3, xx = x + i * 0.25 + Math.sin(t * 6 + now * 3 + i) * 0.08; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  if (S >= 11) { ctx.fillStyle = pal.coffee; ctx.font = '700 0.42px "Barlow Condensed", sans-serif'; ctx.fillText('COFFEE', x, y + 0.98); }
+}
+function drawPlayer(now){
+  const p = g.p, bob = p.moving ? Math.abs(Math.sin(now * 14)) * 0.06 : 0;
+  ctx.globalAlpha = 0.25; ctx.fillStyle = pal.ink; ctx.beginPath(); ctx.ellipse(p.x, p.y + 0.3, R * 0.9, R * 0.35, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = pal.accent; ctx.strokeStyle = pal.sheet; ctx.lineWidth = 0.09;
+  ctx.beginPath(); ctx.arc(p.x, p.y - bob, R, 0, 7); ctx.fill(); ctx.stroke();
+  // which way you're facing
+  ctx.fillStyle = pal.sheet; ctx.beginPath(); ctx.arc(p.x + Math.cos(p.face) * R * 0.55, p.y - bob + Math.sin(p.face) * R * 0.55, 0.08, 0, 7); ctx.fill();
+  // cups on the tray
+  for (let i = 0; i < g.cups; i++) {
+    const a = -Math.PI / 2 + (i - (g.cups - 1) / 2) * 0.62, cx = p.x + Math.cos(a) * 0.62, cy = p.y - bob + Math.sin(a) * 0.62 - 0.05;
+    ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.coffee; ctx.lineWidth = 0.05;
+    ctx.beginPath(); ctx.roundRect(cx - 0.13, cy - 0.14, 0.26, 0.28, 0.06); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = pal.coffee; ctx.fillRect(cx - 0.09, cy - 0.1, 0.18, 0.07);
+  }
+  if (g.stun > 0) { ctx.font = `0.55px ${EMOJI}`; ctx.fillText('💬', p.x - 0.45, p.y - 0.6); }
+}
+
+/* ---------- header and cards ---------- */
+let lastHud = '';
+function hud(){
+  const key = [g.score, g.streak, g.cups, g.missed, g.level].join();
+  if (key === lastHud) return;
+  lastHud = key;
+  $('#hScore').textContent = g.score.toLocaleString();
+  $('#hCombo').textContent = '×' + Math.min(5, 1 + Math.floor(Math.max(0, g.streak - 1) / 2)) + (g.streak > 1 ? ` (${g.streak})` : '');
+  $('#hTray').innerHTML = Array.from({ length: TRAY }, (_, i) => `<span class="pip${i < g.cups ? ' on' : ''}"></span>`).join('');
+  $('#hTray').title = `${g.cups} of ${TRAY} cups`;
+  $('#hLives').innerHTML = Array.from({ length: LIVES }, (_, i) => `<span class="pip ${i < g.missed ? 'miss' : 'life'}"></span>`).join('');
+  $('#hLives').title = `${LIVES - g.missed} misses left`;
+  $('#hLevelN').textContent = g.level;
+  $('#hLevel').textContent = levelName(g.level);
+}
+function showCard(html){ $('#card').innerHTML = html; $('#overlay').hidden = false; $('#card').querySelector('[data-act]')?.focus(); }
+function hideOverlay(){ $('#overlay').hidden = true; }
+function showStart(){
+  phase = 'start'; hud();
+  const best = bestScore(), ok = playable();
+  const people = customers.length, notes = [];
+  if (world.hotDesking) notes.push('Hardly anyone has a desk on this map yet, so for this game people without one borrow a free desk.');
+  if (!ok) notes.push(!customers.length ? 'Nobody on this map has a desk the coffee runner can walk to.' : 'There’s no open floor for a coffee machine on this map.');
+  const party = customers.filter(c => c.party);
+  showCard(`
+    <h2>Coffee Run</h2>
+    <p>The office has run out of coffee. Grab cups at the <b>coffee machine</b> and get them to people’s desks before they run out of patience.</p>
+    <div class="keys">
+      <span><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>WASD</kbd></span><span>Walk</span>
+      <span><kbd>Click</kbd> / <kbd>Tap</kbd></span><span>Walk there (hold to steer)</span>
+      <span><kbd>P</kbd> or <kbd>Esc</kbd></span><span>Pause</span>
+    </div>
+    <p class="muted sm">You carry ${TRAY} cups at a time. Quick deliveries in a row raise your multiplier. ${LIVES} people giving up ends the shift. From level 3, watch out for chatty colleagues.${party.length ? ` <b>${party.map(c => esc(c.name)).join(', ')}</b> ${party.length > 1 ? 'have' : 'has'} a work anniversary this week: their cake orders count double.` : ''}</p>
+    <p class="muted sm">${esc(source.label)} · ${people} ${people === 1 ? 'person' : 'people'} at their desks${world.coffee?.area ? ` · coffee machine in ${esc(world.coffee.area)}` : ''}</p>
+    ${notes.map(n => `<p class="note">${esc(n)}</p>`).join('')}
+    ${best ? `<p class="sm">Best score: <b>${best.toLocaleString()}</b></p>` : ''}
+    <div class="row">
+      ${ok ? '<button class="btn primary big" data-act="start" type="button">Start the shift</button>' : ''}
+      <button class="btn${ok ? '' : ' primary'}" data-act="open" type="button">Open a map file…</button>
+      ${source.src !== 'demo' ? '<button class="btn" data-act="demo" type="button">Play the demo office</button>' : ''}
+    </div>`);
+}
+function pause(){
+  if (phase !== 'play') return;
+  phase = 'pause'; keys.clear(); pointer.down = false;
+  showCard(`<h2>Paused</h2><p class="muted">Your coffee is getting cold.</p>
+    <div class="row"><button class="btn primary big" data-act="resume" type="button">Keep going</button><button class="btn" data-act="start" type="button">Start over</button><button class="btn" data-act="menu" type="button">Back to the start</button></div>`);
+}
+function resume(){ if (phase === 'pause') { phase = 'play'; hideOverlay(); } }
+
+$('#card').addEventListener('click', e => {
+  const a = e.target.closest('[data-act]')?.dataset.act;
+  if (a === 'start') start();
+  else if (a === 'resume') resume();
+  else if (a === 'menu') { g = newGame(); showStart(); }
+  else if (a === 'open') $('#fileIn').click();
+  else if (a === 'demo') setMap(F.demoMap(), 'demo');
+});
+$('#fileIn').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try { setMap(await F.readFile(f), 'file', f.name); }
+  catch (err) { alert(err.message); }
+});
+$('#pauseBtn').addEventListener('click', () => phase === 'play' ? pause() : resume());
+function renderSound(){ const b = $('#soundBtn'); b.textContent = sound ? 'Sound on' : 'Sound off'; b.setAttribute('aria-pressed', String(sound)); }
+$('#soundBtn').addEventListener('click', () => { sound = !sound; try { localStorage.setItem('coffee-run:sound', sound ? '1' : '0'); } catch {} renderSound(); blip('pick'); });
+renderSound();
+
+/* ---------- input ---------- */
+const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+addEventListener('keydown', e => {
+  if (e.target.closest?.('input,textarea,select')) return;
+  const k = KEYMAP[e.code];
+  if (k && phase === 'play') { keys.add(k); e.preventDefault(); return; }
+  if (e.code === 'KeyP' || e.code === 'Escape') { phase === 'play' ? pause() : phase === 'pause' && resume(); e.preventDefault(); }
+  else if ((e.code === 'Space' || e.code === 'Enter') && (phase === 'start' || phase === 'over') && playable() && !e.target.closest?.('button')) { start(); e.preventDefault(); }
+});
+addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) keys.delete(k); });
+addEventListener('blur', () => { keys.clear(); pause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+function toWorld(e){ const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / S, y: (e.clientY - r.top) / S }; }
+cv.addEventListener('pointerdown', e => {
+  if (phase !== 'play') return;
+  const w = toWorld(e); pointer.down = true; pointer.x = w.x; pointer.y = w.y; pointer.lastRoute = -1;
+  cv.setPointerCapture(e.pointerId); e.preventDefault();
+});
+cv.addEventListener('pointermove', e => { if (pointer.down) { const w = toWorld(e); pointer.x = w.x; pointer.y = w.y; } });
+const up = () => { if (pointer.down && phase === 'play') routeTo(pointer.x, pointer.y); pointer.down = false; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+let resizeT;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(layout, 80); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', layout);
+
+let last = performance.now();
+function frame(t){
+  const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  if (phase === 'play' && world) update(dt);
+  if (g) render(t / 1000);
+  requestAnimationFrame(frame);
+}
+
+(async () => {
+  const { data, source: src } = await F.load();
+  try { await document.fonts.ready; } catch {}
+  setMap(data, src);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
