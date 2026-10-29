@@ -143,6 +143,7 @@ canvas.dragging{cursor:grabbing}
         <button type="button" id="zoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
         <button type="button" id="zoomOut" title="Zoom out (−)" aria-label="Zoom out">−</button>
         <button type="button" id="zoomFit" title="Whole office (0)" aria-label="Show the whole office"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
+        <button type="button" id="turnBtn" title="Turn the map 90° (T)" aria-label="Turn the map 90 degrees"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8.5A5.5 5.5 0 1 1 11 3.9"/><path d="M11.5 1.2v3.3H8.2"/></svg></button>
       </div>
       <div class="tip" id="tip" hidden></div>
     </main>
@@ -393,7 +394,7 @@ function update(dt){
   for (const r of rooms) if (r.mtg && simMin > r.mtg.until + 60) { r.mtg.people.forEach(m => { m.room = null; }); r.mtg = null; renderRooms(); }
   // anniversary confetti, now and then, on the day itself
   for (const a of agents) if (a.party && a.party.days === 0 && a.state !== 'out' && Math.random() < dt / 12) confetti(a.x, a.y, 30);
-  for (const b of bits) { b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vy += 8 * dt; b.r += b.vr * dt; }
+  for (const b of bits) { b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vx += b.gx * dt; b.vy += b.gy * dt; b.r += b.vr * dt; }
   bits = bits.filter(b => b.t < b.life);
 }
 function arrive(a, realNow){
@@ -455,10 +456,20 @@ function readPal(){
   for (const k of ['coffee', 'night', 'lamp']) p[k] = cs.getPropertyValue('--' + k).trim();
   return p;
 }
-/* The camera. zoom 1 shows the whole office; S is pixels per square; cx,cy is the square at the middle of the view. */
-const view = { zoom: 1, zt: 1, cx: 0, cy: 0, fit: 20, follow: null };
+/* The camera. zoom 1 shows the whole office; S is pixels per square; cx,cy is the square at the middle of the view.
+   turn is how many quarter turns clockwise the office is shown at, and ang the angle it's at right now. */
+const turnKey = 'office-life:turn';
+const view = { zoom: 1, zt: 1, cx: 0, cy: 0, fit: 20, follow: null, turn: +lsGet(turnKey) % 4 || 0, ang: 0 };
+view.ang = view.turn * Math.PI / 2;
 let W = 0, H = 0, S = 20, dpr = 1, mapImg = null, mapScale = 0, cacheT = 0;
 const maxZoom = () => Math.max(1, 64 / view.fit);
+// a vector turned from the office's way round to the screen's (or back, with -view.ang)
+const rot = (x, y, a = view.ang) => { const c = Math.cos(a), s = Math.sin(a); return { x: x * c - y * s, y: x * s + y * c }; };
+// how many pixels per square fit the whole office on screen at angle a
+function fitFor(a){
+  const c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+  return Math.max(2, Math.min((W - 8) / (world.cols * c + world.rows * s), (H - 8) / (world.cols * s + world.rows * c)));
+}
 function layout(){
   if (!world) return;
   const box = $('#stage').getBoundingClientRect();
@@ -466,7 +477,7 @@ function layout(){
   W = Math.floor(box.width); H = Math.floor(box.height);
   cv.style.width = W + 'px'; cv.style.height = H + 'px';
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-  view.fit = Math.max(2, Math.min((W - 8) / world.cols, (H - 8) / world.rows));
+  view.fit = fitFor(view.ang);
   view.zoom = clamp(view.zoom, 1, maxZoom()); view.zt = clamp(view.zt, 1, maxZoom());
   S = view.fit * view.zoom;
   clampView();
@@ -475,18 +486,28 @@ function layout(){
 }
 // keep the office on screen: centred when it fits, otherwise no further than its edges
 function clampView(){
-  const vw = W / S, vh = H / S;
-  view.cx = world.cols <= vw ? world.cols / 2 : clamp(view.cx, vw / 2, world.cols - vw / 2);
-  view.cy = world.rows <= vh ? world.rows / 2 : clamp(view.cy, vh / 2, world.rows - vh / 2);
+  const cs = [[0, 0], [world.cols, 0], [0, world.rows], [world.cols, world.rows]].map(([x, y]) => rot(x, y));
+  const keep = (k, v, half) => {
+    const lo = Math.min(...cs.map(p => p[k])), hi = Math.max(...cs.map(p => p[k]));
+    return hi - lo <= half * 2 ? (lo + hi) / 2 : clamp(v, lo + half, hi - half);
+  };
+  const q = rot(view.cx, view.cy), w = rot(keep('x', q.x, W / 2 / S), keep('y', q.y, H / 2 / S), -view.ang);
+  view.cx = w.x; view.cy = w.y;
 }
-const toWorld = (px, py) => ({ x: view.cx + (px - W / 2) / S, y: view.cy + (py - H / 2) / S });
+const toWorld = (px, py) => { const d = rot((px - W / 2) / S, (py - H / 2) / S, -view.ang); return { x: view.cx + d.x, y: view.cy + d.y }; };
 // zoom keeping the square under (px,py) where it is
 function setZoom(z, px = W / 2, py = H / 2){
   const before = toWorld(px, py);
   view.zoom = view.zt = clamp(z, 1, maxZoom());
   S = view.fit * view.zoom;
-  if (!view.follow) { view.cx = before.x - (px - W / 2) / S; view.cy = before.y - (py - H / 2) / S; }
+  if (!view.follow) { const d = rot((px - W / 2) / S, (py - H / 2) / S, -view.ang); view.cx = before.x - d.x; view.cy = before.y - d.y; }
   clampView(); scheduleCache();
+}
+// a quarter turn clockwise, so a tall office can fill a wide screen
+function turnView(){
+  view.turn = (view.turn + 1) % 4; lsSet(turnKey, String(view.turn));
+  $('#tip').hidden = true;
+  cacheMap(true);
 }
 // The floor plan is drawn once into a picture and redrawn when the zoom settles. Huge offices are capped so
 // the picture stays a sensible size; they just look a little soft at the closest zoom.
@@ -500,17 +521,26 @@ function cacheMap(force){
   const m = mapImg.getContext('2d');
   m.setTransform(mapScale, 0, 0, mapScale, 0, 0);
   const byDesk = new Map(agents.map(a => [a.desk.id, a]));
-  F.drawMap(m, world, pal, { deskColor: d => byDesk.has(d.id) ? byDesk.get(d.id).ci : -2, numbers: mapScale / dpr >= 14 });
+  F.drawMap(m, world, pal, { deskColor: d => byDesk.has(d.id) ? byDesk.get(d.id).ci : -2, numbers: mapScale / dpr >= 14, turn: view.turn });
 }
 function follow(a){
   view.follow = a || null;
   // close enough to see what they're doing
   if (a && view.fit * view.zt < 30) view.zt = Math.min(maxZoom(), 30 / view.fit);
-  shownFollow = '';
+  shownFollow = null;
   $('#hint').hidden = true;
 }
 function moveCamera(dt){
   const k = 1 - Math.exp(-dt * 6);
+  // turning: always clockwise, rescaling as it goes so the whole office stays in view
+  const goal = view.turn * Math.PI / 2;
+  if (view.ang !== goal) {
+    let left = goal - view.ang; if (left < 0) left += Math.PI * 2;
+    const step = Math.max(left * k * 1.5, dt * 0.6);
+    view.ang = step >= left - 0.004 ? goal : (view.ang + step) % (Math.PI * 2);
+    view.fit = fitFor(view.ang); view.zoom = clamp(view.zoom, 1, maxZoom()); view.zt = clamp(view.zt, 1, maxZoom());
+    S = view.fit * view.zoom; scheduleCache();
+  }
   if (Math.abs(view.zt - view.zoom) > 0.002) {
     view.zoom += (view.zt - view.zoom) * k;
     if (Math.abs(view.zt - view.zoom) < 0.002) view.zoom = view.zt;
@@ -535,19 +565,23 @@ function render(now){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
   if (!world || !mapImg) return;
-  const ox = (W / 2 - view.cx * S) * dpr, oy = (H / 2 - view.cy * S) * dpr, k = S * dpr / mapScale;
+  // squares to pixels: turned by view.ang about the middle of the view
+  const K = S * dpr, c = Math.cos(view.ang), s = Math.sin(view.ang);
+  const ox = W / 2 * dpr - K * (c * view.cx - s * view.cy), oy = H / 2 * dpr - K * (s * view.cx + c * view.cy), k = K / mapScale;
   ctx.imageSmoothingQuality = 'high';
-  ctx.setTransform(k, 0, 0, k, ox, oy);
+  ctx.setTransform(k * c, k * s, -k * s, k * c, ox, oy);
   ctx.drawImage(mapImg, 0, 0);
-  ctx.setTransform(S * dpr, 0, 0, S * dpr, ox, oy);
+  ctx.setTransform(K * c, K * s, -K * s, K * c, ox, oy);
   ctx.strokeStyle = pal.line; ctx.lineWidth = 1 / S; ctx.strokeRect(0, 0, world.cols, world.rows);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-  for (const c of world.coffees) {
-    const [cx, cy] = c.cell;
+  for (const m of world.coffees) {
+    const [cx, cy] = m.cell;
     ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.coffee; ctx.lineWidth = 0.1;
     ctx.beginPath(); ctx.roundRect(cx + 0.12, cy + 0.12, 1.76, 1.76, 0.3); ctx.fill(); ctx.stroke();
+    ctx.save(); upright(cx + 1, cy + 1);
     ctx.font = `1.15px ${EMOJI}`; ctx.fillText('☕', cx + 1, cy + 1.06);
+    ctx.restore();
   }
   const dark = darkness(simMin);
   if (dark > 0) {
@@ -565,6 +599,7 @@ function render(now){
   for (const a of agents) {
     if (a.state === 'out') continue;
     const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
+    ctx.save(); upright(a.x, a.y);
     ctx.globalAlpha = 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(a.x, a.y + 0.28, 0.3, 0.12, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     const followed = view.follow === a;
     if (followed) { ctx.strokeStyle = pal.accent; ctx.lineWidth = 0.09; ctx.beginPath(); ctx.arc(x, y, 0.58 + Math.sin(now * 4) * 0.04, 0, 7); ctx.stroke(); }
@@ -579,14 +614,17 @@ function render(now){
     }
     // a cup in hand while walking back or sitting with it
     if (carrying(a) && a.state !== 'stay') { ctx.font = `${Math.max(0.6, 12 / S)}px ${EMOJI}`; ctx.fillText('☕', x + 0.42 + 3 / S, y + 0.12); }
+    ctx.restore();
   }
   // emojis go on top of everyone, and never smaller than about 17 pixels
   const E = Math.max(0.85, 17 / S);
   for (const a of agents) {
     if (a.state === 'out') continue;
     const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
+    if (!a.party && !(a.emoji && (a.state === 'stay' || a.with))) continue;
+    ctx.save(); upright(a.x, a.y);
     if (a.party) { ctx.font = `${E * 0.85}px ${EMOJI}`; ctx.fillText('🎈', x + 0.3 + E * 0.25, y - 0.3 - E * 0.4 + Math.sin(now * 2 + a.phase) * 0.06); }
-    if (!a.emoji || !(a.state === 'stay' || a.with)) continue;
+    if (!a.emoji || !(a.state === 'stay' || a.with)) { ctx.restore(); continue; }
     const top = y - 0.42 - E * 0.6;
     if (a.emoji === '💬') {
       // three dots that take turns
@@ -596,6 +634,7 @@ function render(now){
       for (let k = 0; k < 3; k++) { ctx.fillStyle = pal.muted; ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(now * 5 - k * 0.9 + a.phase)); ctx.beginPath(); ctx.arc(x + (k - 1) * w * 0.27, top, h * 0.13, 0, 7); ctx.fill(); }
       ctx.globalAlpha = 1;
     } else { ctx.font = `${E}px ${EMOJI}`; ctx.fillText(a.emoji, x, top); }
+    ctx.restore();
   }
   for (const b of bits) { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.globalAlpha = 1 - b.t / b.life; ctx.fillStyle = b.c; ctx.fillRect(-0.08, -0.04, 0.16, 0.08); ctx.restore(); }
   ctx.globalAlpha = 1;
@@ -603,13 +642,21 @@ function render(now){
   const quiet = agents.length && agents.every(a => a.state === 'out');
   if (quiet) {
     ctx.fillStyle = pal.muted; ctx.font = '700 1.1px "Barlow Condensed", sans-serif';
+    upright(world.cols / 2, world.rows / 2);
     ctx.fillText(weekend() ? 'It’s the weekend. See you Monday.' : simMin < 12 * 60 ? 'Nobody’s in yet.' : 'Everyone has gone home.', world.cols / 2, world.rows / 2);
   }
 }
+// turn the drawing about (x,y) back upright on screen, so writing and people never lie on their side
+function upright(x, y){
+  if (!view.ang) return;
+  ctx.translate(x, y); ctx.rotate(-view.ang); ctx.translate(-x, -y);
+}
+// confetti flies up and falls down the screen, whichever way round the office is
 function confetti(x, y, n){
+  const up = rot(0, -0.3, -view.ang), g = rot(0, 8, -view.ang);
   for (let i = 0; i < n; i++) {
-    const a = rand(-Math.PI, 0), v = rand(2, 5);
-    bits.push({ x, y: y - 0.3, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1.5, r: rand(0, 6), vr: rand(-12, 12), t: 0, life: rand(0.8, 1.5), c: pal.team[i % 8] });
+    const a = rand(-Math.PI, 0), v = rand(2, 5), vel = rot(Math.cos(a) * v, Math.sin(a) * v - 1.5, -view.ang);
+    bits.push({ x: x + up.x, y: y + up.y, vx: vel.x, vy: vel.y, gx: g.x, gy: g.y, r: rand(0, 6), vr: rand(-12, 12), t: 0, life: rand(0.8, 1.5), c: pal.team[i % 8] });
   }
 }
 
@@ -654,6 +701,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyF') $('#fullBtn').click();
   else if (e.code === 'KeyH') $('#sideBtn').click();
   else if (e.code === 'KeyR') followSomeone();
+  else if (e.code === 'KeyT') turnView();
   else if (e.code === 'Escape') follow(null);
   else if (e.key === '+' || e.key === '=') $('#zoomIn').click();
   else if (e.key === '-' || e.key === '_') $('#zoomOut').click();
@@ -700,7 +748,7 @@ cv.addEventListener('pointermove', e => {
   } else if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; cv.classList.add('dragging'); $('#tip').hidden = true; if (view.follow) { follow(null); drag.cx = view.cx; drag.cy = view.cy; } }
-    if (drag.moved) { view.cx = drag.cx - dx / S; view.cy = drag.cy - dy / S; clampView(); }
+    if (drag.moved) { const d = rot(dx / S, dy / S, -view.ang); view.cx = drag.cx - d.x; view.cy = drag.cy - d.y; clampView(); }
   }
 });
 function pointerEnd(e){
@@ -725,6 +773,7 @@ cv.addEventListener('wheel', e => {
 $('#zoomIn').addEventListener('click', () => { view.zt = clamp(view.zt * 1.5, 1, maxZoom()); });
 $('#zoomOut').addEventListener('click', () => { view.zt = clamp(view.zt / 1.5, 1, maxZoom()); });
 $('#zoomFit').addEventListener('click', () => { follow(null); view.zt = 1; });
+$('#turnBtn').addEventListener('click', turnView);
 $('#followBtn').addEventListener('click', followSomeone);
 function followSomeone(){
   const inn = agents.filter(a => a.state !== 'out' && a !== view.follow);

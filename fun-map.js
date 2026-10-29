@@ -352,9 +352,10 @@ function build(data){
     const reach = desks.filter(d => d.reach), out = [];
     for (const kz of zones.filter(z => COFFEE_AREA.test(z.name || ''))) {
       const P = zonePts(kz), zx = P.reduce((s, p) => s + p[0], 0) / P.length, zy = P.reduce((s, p) => s + p[1], 0) / P.length;
-      // keep clear of the area's name, written along the top of its top-left corner
-      const tl = P.reduce((a, p) => p[1] < a[1] || p[1] === a[1] && p[0] < a[0] ? p : a, P[0]), labelEnd = tl[0] + 0.6 + String(kz.name).length * 0.36;
-      const onLabel = (x, y) => y <= tl[1] && x < labelEnd;
+      // keep clear of the area's name, written from its top-left corner: along the top, or down the left side
+      // when the view is turned a quarter
+      const tl = P.reduce((a, p) => p[1] < a[1] || p[1] === a[1] && p[0] < a[0] ? p : a, P[0]), labelLen = 0.6 + String(kz.name).length * 0.36;
+      const onLabel = (x, y) => y <= tl[1] && x < tl[0] + labelLen || x <= tl[0] && y < tl[1] + labelLen;
       const cand = zoneCells(kz).filter(([x, y]) => fits2(x, y)).map(([x, y]) => ({ x, y, s: -snug(x, y) * 1.5 + Math.hypot(x + 1 - zx, y + 1 - zy) * 0.4 + (onLabel(x, y) ? 20 : 0) })).sort((a, b) => a.s - b.s);
       const c = cand.slice(0, 40).find(k => place(k.x, k.y));
       if (c) out.push(machine(c.x, c.y, kz.name));
@@ -466,9 +467,18 @@ function palette(){
 }
 const teamColor = (pal, i) => i >= 0 ? pal.team[i] : pal.lineStrong;
 
-// the floor plan, in squares: the caller has already scaled the context so 1 unit = 1 square
+// the floor plan, in squares: the caller has already scaled the context so 1 unit = 1 square.
+// opts.turn (0-3 quarter turns clockwise) keeps the writing upright when the caller shows the map turned.
 function drawMap(ctx, world, pal, opts = {}){
-  const { cols, rows } = world;
+  const { cols, rows } = world, turn = opts.turn || 0;
+  // text tucked into the top-left corner (x,y) of something, as seen on screen
+  const corner = (text, x, y, dx, dy) => {
+    const right = turn === 1 || turn === 2, bottom = turn >= 2;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-turn * Math.PI / 2);
+    ctx.textAlign = right ? 'right' : 'left'; ctx.textBaseline = bottom ? 'bottom' : 'top';
+    ctx.fillText(text, right ? -dx : dx, bottom ? -dy : dy);
+    ctx.restore();
+  };
   ctx.fillStyle = pal.sheet; ctx.fillRect(0, 0, cols, rows);
   ctx.lineWidth = 0.03;
   for (let x = 0; x <= cols; x++) { ctx.strokeStyle = x % 5 ? pal.grid : pal.gridMajor; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, rows); ctx.stroke(); }
@@ -482,8 +492,8 @@ function drawMap(ctx, world, pal, opts = {}){
     ctx.globalAlpha = 1;
     if (z.name) {
       const tl = P.reduce((a, p) => p[1] < a[1] || p[1] === a[1] && p[0] < a[0] ? p : a, P[0]);
-      ctx.fillStyle = pal.accent; ctx.font = '600 0.62px "Barlow Condensed", "Arial Narrow", sans-serif'; ctx.textBaseline = 'top';
-      ctx.fillText(String(z.name).toUpperCase(), tl[0] + 0.3, tl[1] + 0.28);
+      ctx.fillStyle = pal.accent; ctx.font = '600 0.62px "Barlow Condensed", "Arial Narrow", sans-serif';
+      corner(String(z.name).toUpperCase(), tl[0], tl[1], 0.3, 0.28);
     }
   }
 
@@ -502,8 +512,8 @@ function drawMap(ctx, world, pal, opts = {}){
     }
     ctx.stroke();
     if (opts.numbers !== false && d.number !== '') {
-      ctx.fillStyle = pal.muted; ctx.font = '600 0.5px "JetBrains Mono", ui-monospace, monospace'; ctx.textBaseline = 'top';
-      ctx.fillText(String(d.number), d.cells[0][0] + 0.2, d.cells[0][1] + 0.18);
+      ctx.fillStyle = pal.muted; ctx.font = '600 0.5px "JetBrains Mono", ui-monospace, monospace';
+      corner(String(d.number), d.cells[0][0], d.cells[0][1], 0.2, 0.18);
     }
   }
 
