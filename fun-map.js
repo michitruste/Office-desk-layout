@@ -1,4 +1,4 @@
-/* Shared by coffee-run.html and office-life.html. It reads the same map as index.html (the copy saved in this
+/* Used by office-life.html. It reads the same map as index.html (the copy saved in this
    browser, the desk-map-data.json next to it, or a file you pick) and turns it into a floor people can walk on.
    Everything is measured in squares, like the app: desks and pillars fill squares, walls and windows close the
    edges between squares, and doors leave a gap. Nothing here ever writes to the map. */
@@ -310,19 +310,30 @@ function build(data){
   const seatCells = new Set(desks.filter(d => d.reach).map(d => idx(d.seat.cx, d.seat.cy)));
   const roomy = (x, y) => indoors(x, y) && !seatCells.has(idx(x, y)) && [0, 1, 2, 3].every(k => open(x, y, DIRS[k][0], DIRS[k][1]));
 
-  // the coffee machine: in an area called something like "Kitchen" if there is one, else an open spot that's a fair walk from everyone
-  function pickCoffee(){
-    const kz = zones.find(z => COFFEE_AREA.test(z.name || ''));
-    if (kz) {
+  // Coffee machines: one for about every 30 people, up to 6. Areas called something like "Kitchen" each get one;
+  // the rest go in open spots that keep everyone's walk to the nearest machine short.
+  function pickCoffees(){
+    const reach = desks.filter(d => d.reach), seatedN = reach.filter(d => d.person).length;
+    const want = Math.max(1, Math.min(6, Math.round((seatedN >= 4 ? seatedN : Math.min(reach.length, people.size)) / 30)));
+    const out = [];
+    for (const kz of zones.filter(z => COFFEE_AREA.test(z.name || ''))) {
       const c = zoneCells(kz).filter(([x, y]) => roomy(x, y)), P = zonePts(kz);
       const zx = P.reduce((s, p) => s + p[0], 0) / P.length, zy = P.reduce((s, p) => s + p[1], 0) / P.length;
-      if (c.length) return { cell: best(c, ([x, y]) => -openness(x, y, 2) * 2 + Math.hypot(x + 0.5 - zx, y + 0.5 - zy)), area: kz.name };
+      if (c.length) out.push({ cell: best(c, ([x, y]) => -openness(x, y, 2) * 2 + Math.hypot(x + 0.5 - zx, y + 0.5 - zy)), area: kz.name });
     }
-    const seats = desks.filter(d => d.reach).slice(0, 40).map(d => field(d.seat.cx, d.seat.cy));
-    const c = [];
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (roomy(x, y)) c.push([x, y]);
-    if (!c.length) return null;
-    return { cell: best(c, ([x, y]) => { let m = 0; for (const f of seats) m = Math.max(m, f[idx(x, y)]); return m + 0.7 * (25 - openness(x, y, 2)); }), area: null };
+    if (out.length >= want || !reach.length) return out;
+    const step = Math.ceil(reach.length / 60), seats = reach.filter((_, i) => i % step === 0).map(d => field(d.seat.cx, d.seat.cy));
+    const cand = [];
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (roomy(x, y)) cand.push({ x, y, i: idx(x, y), crowd: 0.7 * (25 - openness(x, y, 2)) });
+    if (!cand.length) return out;
+    // how far each seat is from its nearest machine so far
+    const near = seats.map(f => out.reduce((m, o) => Math.min(m, f[idx(o.cell[0], o.cell[1])]), Infinity));
+    while (out.length < want) {
+      const c = best(cand, k => { let m = 0; for (let s = 0; s < seats.length; s++) m = Math.max(m, Math.min(near[s], seats[s][k.i])); return m + k.crowd; });
+      out.push({ cell: [c.x, c.y], area: null });
+      seats.forEach((f, s) => { near[s] = Math.min(near[s], f[c.i]); });
+    }
+    return out;
   }
   // the way in: the outer side of a door that's nearest the edge of the sheet, else the edge of the floor nearest the desks
   function pickEntrance(){
@@ -341,12 +352,18 @@ function build(data){
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (edgeDist(x, y) === 0 && onFloor(x, y)) c.push([x, y]);
     return c.length ? best(c, ([x, y]) => Math.hypot(x - mx, (y - my) * 0.8) - (y === rows - 1 ? 4 : 0)) : null;
   }
-  const coffee = pickCoffee();
+  const coffees = pickCoffees(), coffee = coffees[0] || null;
   const entrance = pickEntrance() || coffee?.cell || nearestFree(cols / 2, rows - 1);
-  const meetingZone = zones.find(z => MEETING_AREA.test(z.name || '')) || null;
+  const meetingZones = zones.filter(z => MEETING_AREA.test(z.name || ''));
+  // squares to stand at and look out of a window: only windows in an outer wall, not glass between two rooms.
+  // With no walls round the office there's no telling inside from out, so every window counts.
   const windows = [];
+  const outdoor = (x, y) => !inside(x, y) || free(x, y) && outside[idx(x, y)] === 1;
   for (const f of fixtures) if (f.kind === 'window') for (const [o, x, y] of segEdges(f)) {
-    for (const [cx, cy] of o === 'h' ? [[x, y], [x, y - 1]] : [[x, y], [x - 1, y]]) if (indoors(cx, cy)) windows.push([cx, cy]);
+    const [a, b] = o === 'h' ? [[x, y], [x, y - 1]] : [[x, y], [x - 1, y]];
+    if (!indoorCount) { for (const [cx, cy] of [a, b]) if (onFloor(cx, cy)) windows.push([cx, cy]); continue; }
+    if (indoors(a[0], a[1]) && outdoor(b[0], b[1])) windows.push(a);
+    else if (indoors(b[0], b[1]) && outdoor(a[0], a[1])) windows.push(b);
   }
 
   // team colours, in the same order as the app's default "Colour by: Team"
@@ -378,7 +395,7 @@ function build(data){
   }
 
   return {
-    cols, rows, desks, zones, fixtures, people, wallRects, coffee, entrance, windows, meetingZone,
+    cols, rows, desks, zones, fixtures, people, wallRects, coffee, coffees, entrance, windows, meetingZones,
     seated, hotDesking, colorField, groupNames, groupOf, colorIndex,
     free, onFloor, indoors, canMove, route, distance, nearestFree, randomNear, besideSeat, zoneCells,
     isBlocked: (x, y) => !inside(x, y) || block[idx(x, y)] === 1,
@@ -477,17 +494,19 @@ function demoMap(){
   const pods = [[4, 5], [15, 5], [4, 15], [15, 15]], desks = [];
   for (const [px, py] of pods) for (const [dx, dy] of [[0, 0], [4, 0], [0, 2], [4, 2]]) desks.push({ id: 'dd' + desks.length, number: String(desks.length + 1), shape: 'h', rot: 0, x: px + dx, y: py + dy, personId: null });
   [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14].forEach((d, i) => { desks[d].personId = P[i].id; });
+  desks.push({ id: 'dt1', number: '', shape: 'h', rot: 0, x: 30, y: 19, personId: null }); // the meeting room table
   const seg = (kind, x1, y1, x2, y2, swing) => ({ id: 'df' + seg.n++, kind, x1, y1, x2, y2, ...(kind === 'door' ? { swing } : {}) });
   seg.n = 0;
   const fixtures = [
     seg('wall', 2, 2, 8, 2), seg('window', 8, 2, 14, 2), seg('wall', 14, 2, 17, 2), seg('window', 17, 2, 23, 2), seg('wall', 23, 2, 36, 2),
     seg('wall', 2, 2, 2, 24), seg('wall', 36, 2, 36, 24),
     seg('wall', 2, 24, 16, 24), seg('door', 16, 24, 18, 24, 0), seg('wall', 18, 24, 36, 24),
-    seg('wall', 28, 2, 28, 10), seg('wall', 28, 10, 31, 10), seg('door', 31, 10, 33, 10, 1), seg('wall', 33, 10, 36, 10),
+    seg('wall', 28, 2, 28, 6), seg('door', 28, 6, 28, 8, 0), seg('wall', 28, 8, 28, 10), seg('wall', 28, 10, 36, 10),
+    seg('wall', 28, 10, 28, 12), seg('door', 28, 12, 28, 14, 0), seg('window', 28, 14, 28, 16),
     seg('wall', 28, 16, 36, 16), seg('wall', 28, 16, 28, 19), seg('door', 28, 19, 28, 21, 0), seg('wall', 28, 21, 28, 24),
     { id: 'dp1', kind: 'pillar', x: 13, y: 12, w: 1, h: 1 }, { id: 'dp2', kind: 'pillar', x: 24, y: 12, w: 1, h: 1 }
   ];
-  const zones = [{ id: 'dz1', name: 'Kitchen', x: 28, y: 2, w: 8, h: 8 }, { id: 'dz2', name: 'Meeting room', x: 28, y: 16, w: 8, h: 8 }];
+  const zones = [{ id: 'dz1', name: 'Kitchen', x: 28, y: 2, w: 8, h: 8 }, { id: 'dz2', name: 'Huddle room', x: 28, y: 10, w: 8, h: 6 }, { id: 'dz3', name: 'Meeting room', x: 28, y: 16, w: 8, h: 8 }];
   return { app: 'office-desk-map', version: 1, demo: true, desks, people: P, zones, fixtures };
 }
 
