@@ -11,6 +11,7 @@ A floor plan of the office desks: who sits where, their details, rows, areas, an
 | `README.md` | This file. |
 | `office-life.html` | Your floor plan with people going about their day, for a wall screen. See [Office Life](#office-life). |
 | `fun-map.js` | Used by `office-life.html` to read the map. It never changes it. |
+| `evacuation-plan.json` | Optional. The evacuation zones and routes for Office Life's drills, exported from Office Life. See [Emergency drills](#emergency-drills). |
 
 ## Getting started (Chrome or Edge)
 
@@ -78,6 +79,20 @@ These can't write to files directly. The map saves in the browser instead, and t
 - **Following someone:** click a person to follow them. The view zooms in and keeps them in sight, and a label at the top says what they're doing. Click a line under *What's happening* to follow that person, or **Follow someone** (**R**) to pick someone who's up and about. Click the floor, the **×**, or press **Esc** to stop.
 - **Wall screen:** **Full screen** (**F**) and **H** to hide the side panel. Hover or tap someone to see who they are.
 - **Anniversaries:** the side panel lists work anniversaries from the last week and the next month, plus anyone who joined in the last 30 days. When there are none, it names who's next. People with an anniversary this week carry a 🎈, and on the day itself their desk gets confetti.
+
+### Emergency drills
+
+Under **Emergency drills** in the side panel:
+
+- **🌍 Earthquake:** an earthquake alert sounds first (the border flashes amber) and everyone heads out. 30 seconds later the earthquake hits and the map sways gently for 8 seconds. Anyone still inside drops, covers and holds on, under their desk if they're at it, then carries on out once the shaking stops. Anyone already outside keeps walking to the meeting point.
+- **🔥 Fire:** click where the fire starts, or **Somewhere random**. The alarm flashes and everyone heads out at once. The fire spreads square by square, but not through walls. Anyone whose way out runs into it goes round it or uses another exit; anyone with no way left is marked 🆘.
+- People disappear from the map as they go through the exit, as they're now outside the building, and each exit shows how many have gone out through it. The banner counts how many are out and times the drill. Drills play in real seconds at walking pace, so the time is a rough idea of how long it would really take. **End drill** or **Back to work** brings everyone back in through the exit they used and sends them to their desks, and a finished drill also ends by itself after 30 seconds.
+
+**The evacuation plan:** click **Edit the evacuation plan**. Click **＋ Zone** and drag over the desks that share a way out. Then click the route from inside the zone to its exit, one point at a time, and finish with **Enter**, a double-click or **Finish route**. The line shows the way people will actually walk, round desks and through doors. Drag a zone's corners or a route's dots to change them, and rename zones in the list.
+
+- People follow the route of the zone they're *standing in* when the alarm goes off, joining it at the nearest point. Anyone outside every zone uses the nearest exit. Without a plan, every door in an outer wall is an exit.
+- Zones and routes are only shown while you edit the plan, never while the office is running.
+- The plan is saved in this browser, separately from the desk map. **Export plan** saves it as `evacuation-plan.json`, and **Import plan…** loads one, for example on the wall screen's computer. When the folder is served as a website, Office Life loads `evacuation-plan.json` from next to the page by itself, as long as that browser hasn't saved a plan of its own.
 
 It works a few things out from the map:
 

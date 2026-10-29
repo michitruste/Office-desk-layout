@@ -1,5 +1,6 @@
 /* Used by office-life.html. It reads the same map as index.html (the copy saved in this
-   browser, the desk-map-data.json next to it, or a file you pick) and turns it into a floor people can walk on.
+   browser, the desk-map-data.json next to it, or a file you pick) and turns it into a floor people can walk on,
+   with the exits a drill sends them to.
    Everything is measured in squares, like the app: desks and pillars fill squares, walls and windows close the
    edges between squares, and doors leave a gap. Nothing here ever writes to the map. */
 (function(){
@@ -397,6 +398,16 @@ function build(data){
   const coffees = pickCoffees(), coffee = coffees[0] || null;
   fields.clear(); // routes worked out before the machines went down could walk through them
   const entrance = pickEntrance() || coffee?.spot || nearestFree(cols / 2, rows - 1);
+  // the ways out: the outside square of every door in an outer wall, or just the entrance when there's none
+  const exits = [];
+  for (const f of fixtures) {
+    if (f.kind !== 'door') continue;
+    const horiz = f.y1 === f.y2, L = (f.x2 - f.x1) + (f.y2 - f.y1), m = Math.floor(L / 2) - (L % 2 ? 0 : 1);
+    const [a, b] = horiz ? [[f.x1 + m, f.y1 - 1], [f.x1 + m, f.y1]] : [[f.x1 - 1, f.y1 + m], [f.x1, f.y1 + m]];
+    const out = (p, q) => indoors(p[0], p[1]) && onFloor(q[0], q[1]) && !indoors(q[0], q[1]);
+    if (out(a, b)) exits.push(b); else if (out(b, a)) exits.push(a);
+  }
+  if (!exits.length && entrance) exits.push(entrance);
   const meetingZones = zones.filter(z => MEETING_AREA.test(z.name || ''));
   // squares to stand at and look out of a window: only windows in an outer wall, not glass between two rooms.
   // With no walls round the office there's no telling inside from out, so every window counts.
@@ -439,9 +450,9 @@ function build(data){
   }
 
   return {
-    cols, rows, desks, zones, fixtures, people, wallRects, coffee, coffees, entrance, windows, meetingZones,
+    cols, rows, desks, zones, fixtures, people, wallRects, coffee, coffees, entrance, exits, windows, meetingZones,
     seated, hotDesking, colorField, groupNames, groupOf, colorIndex,
-    free, onFloor, indoors, canMove, route, distance, nearestFree, randomNear, besideSeat, zoneCells,
+    free, onFloor, indoors, canMove, wallBetween, route, smooth, distance, nearestFree, randomNear, besideSeat, zoneCells,
     isBlocked: (x, y) => !inside(x, y) || block[idx(x, y)] === 1,
     deskAtCell: (x, y) => inside(x, y) && deskAt[idx(x, y)] >= 0 ? desks[deskAt[idx(x, y)]] : null
   };
@@ -563,5 +574,5 @@ function demoMap(){
   return { app: 'office-desk-map', version: 1, demo: true, desks, people: P, zones, fixtures };
 }
 
-window.FunMap = { load, readFile, sourceLabel, build, drawMap, palette, teamColor, initials, shortName, anniversaries, celebrating, demoMap };
+window.FunMap = { load, readFile, sourceLabel, build, drawMap, palette, teamColor, initials, shortName, anniversaries, celebrating, demoMap, heapPush, heapPop };
 })();

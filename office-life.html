@@ -104,6 +104,45 @@ canvas.dragging{cursor:grabbing}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .note{font-size:13px;padding:7px 10px;border-radius:8px;background:var(--warn-soft);color:var(--warn);margin:0}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.solid{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--danger)}
+.btn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+.panel p.m{color:var(--muted);font-size:13px;margin:0 0 8px}
+.panel p.m:last-child{margin-bottom:0}
+.panel .row{display:flex;flex-wrap:wrap;gap:6px}
+.drills{display:flex;gap:6px;margin-bottom:8px}
+.drills .btn{flex:1}
+.big{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.1;margin:0 0 6px}
+/* the drill banner and the plan editor's bar, along the top of the map */
+.banner{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:1;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 12px;width:max-content;max-width:calc(100% - 20px);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:7px 8px 7px 14px;box-shadow:0 8px 24px -12px var(--shadow);font-size:14px}
+.banner b{font-family:var(--f-display);font-size:19px;font-weight:700;line-height:1.1}
+.banner .t{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.banner.col{flex-direction:column;align-items:stretch;padding:8px 10px;gap:6px}
+.banner .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.banner .row b{margin-right:auto;padding-right:6px}
+.banner .hint2{font-size:12.5px;color:var(--muted);max-width:520px;line-height:1.35}
+.stage.drilling .follow{top:64px}
+.stage::after{content:'';position:absolute;inset:0;border-radius:10px;pointer-events:none}
+.stage.alarm-fire::after{animation:alarm 1s steps(1) infinite}
+.stage.alarm-quake::after{animation:alarm-quake 1s steps(1) infinite}
+.stage.shaking::after{animation:none;box-shadow:inset 0 0 0 5px var(--warn)}
+@keyframes alarm{0%{box-shadow:inset 0 0 0 5px var(--danger)}50%{box-shadow:none}}
+@keyframes alarm-quake{0%{box-shadow:inset 0 0 0 5px var(--warn)}50%{box-shadow:none}}
+@media (prefers-reduced-motion: reduce){ .stage.alarm-fire::after{animation:none;box-shadow:inset 0 0 0 5px var(--danger)} .stage.alarm-quake::after{animation:none;box-shadow:inset 0 0 0 5px var(--warn)} }
+.stage.editing canvas{cursor:default}
+.stage.tool-zone canvas,.stage.tool-route canvas,.stage.pick canvas{cursor:crosshair}
+.zlist{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+.zlist li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.zlist li.sel{border-color:var(--accent);background:var(--accent-soft)}
+.zlist li.empty{display:block;cursor:default;color:var(--muted);font-size:13.5px}
+.zlist .dot{grid-row:auto}
+.zlist input{font:inherit;font-weight:600;border:1px solid transparent;background:transparent;color:inherit;border-radius:5px;padding:2px 4px;margin-left:-4px;min-width:0;width:100%}
+.zlist input:hover,.zlist input:focus{border-color:var(--line);background:var(--surface)}
+.zlist .m{grid-column:2;color:var(--muted);font-size:12.5px;line-height:1.3}
+.zlist .m.bad{color:var(--danger)}
+.zlist .row{grid-column:2}
 @media (max-width:900px){
   .main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto}
   .stage{height:62vh;min-height:300px}
@@ -146,16 +185,29 @@ canvas.dragging{cursor:grabbing}
         <button type="button" id="turnBtn" title="Turn the map 90° (T)" aria-label="Turn the map 90 degrees"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8.5A5.5 5.5 0 1 1 11 3.9"/><path d="M11.5 1.2v3.3H8.2"/></svg></button>
       </div>
       <div class="tip" id="tip" hidden></div>
+      <div class="banner" id="drillbar" role="status" hidden></div>
+      <div class="banner col" id="planbar" hidden>
+        <div class="row"><b>Evacuation plan</b><button class="btn small" type="button" data-plan="zone">＋ Zone</button><button class="btn small" type="button" data-plan="finish">Finish route</button><button class="btn small solid" type="button" data-plan="done">Done</button></div>
+        <div class="hint2" id="planHint"></div>
+      </div>
     </main>
     <aside class="side">
       <section class="panel" id="annPanel"><h2>Anniversaries</h2><div id="ann"></div></section>
       <section class="panel"><h2>What’s happening</h2><ul class="log" id="log"></ul></section>
+      <section class="panel" id="drillPanel"><h2>Emergency drills</h2><div id="drillBody"></div></section>
+      <section class="panel" id="planPanel" hidden>
+        <h2>Evacuation plan</h2>
+        <ul class="zlist" id="zlist"></ul>
+        <div class="row" style="margin-bottom:8px"><button class="btn small" type="button" data-plan="export">Export plan</button><button class="btn small" type="button" data-plan="import">Import plan…</button></div>
+        <p class="m" id="planNote"></p>
+      </section>
       <section class="panel" id="roomPanel" hidden><h2>Meeting rooms</h2><ul class="list rooms" id="rooms"></ul></section>
       <section class="panel" id="teamPanel"><h2 id="teamTitle">Teams</h2><div class="legend" id="legend"></div></section>
     </aside>
   </div>
 </div>
 <input type="file" id="fileIn" accept=".json,application/json" hidden>
+<input type="file" id="planIn" accept=".json,application/json" hidden>
 <script src="fun-map.js"></script>
 <script>
 'use strict';
@@ -181,13 +233,13 @@ const hhmm = m => { m = ((Math.floor(m) % 1440) + 1440) % 1440; return String(Ma
 const weekend = () => mode === 'live' && [0, 6].includes(new Date().getDay());
 function tickClock(dt){
   if (mode === 'live') { const d = new Date(); simMin = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; simDay = Math.floor((d - new Date(2000, 0, 1)) / 864e5); return; }
-  if (!paused) fastClock += dt * FAST_RATE;
+  if (!paused && !drilling()) fastClock += dt * FAST_RATE; // a drill plays out in real seconds, so the day waits for it
   if (fastClock >= DAY_END) { fastClock = DAY_START; simDay++; newDay(); log('A new day begins'); }
   simMin = fastClock;
 }
 
 /* ---------- people ---------- */
-let world = null, agents = [], rooms = [], roomAt = new Map(), pal, events = [], bits = [], annList = [];
+let world = null, agents = [], rooms = [], roomAt = new Map(), pal, events = [], bits = [], annList = [], floorCells = [];
 const WALK = { live: 1.7, fast: 2.6 };
 const TRIPS = [['coffee', 34], ['chat', 30], ['stretch', 14], ['area', 10], ['meeting', 12]];
 
@@ -213,17 +265,19 @@ function setMap(data, src, fileName){
     for (const [x, y] of cells) roomAt.set(x + ',' + y, r);
     return r;
   }).filter(r => r.table.length + r.rest.length >= 2);
-  events = []; bits = [];
+  floorCells = [];
+  for (let y = 0; y < world.rows; y++) for (let x = 0; x < world.cols; x++) if (world.indoors(x, y)) floorCells.push([x, y]);
+  events = []; bits = []; drill = null; legCache.clear(); edit.draft = edit.handle = null;
   view.follow = null; view.zoom = view.zt = 1; view.cx = world.cols / 2; view.cy = world.rows / 2;
   newDay(true);
-  layout(); renderSide();
+  layout(); renderSide(); stageClass(); renderDrill(); renderEditor();
 }
 // everyone's plan for the day, in minutes after midnight
 function newDay(placeNow){
   for (const a of agents) {
     a.plan = { arrive: 8 * 60 + rand(-35, 70), leave: 17 * 60 + rand(-25, 85), lunch: 12 * 60 + rand(0, 70), lunchFor: rand(30, 55), lunchOut: Math.random() < 0.45 };
     a.lunched = false; a.next = a.plan.arrive + rand(15, 45);
-    a.state = 'out'; a.path = null; a.with = null; a.room = null; a.after = null; a.carry = false; a.emoji = ''; a.what = 'Not in yet';
+    a.state = 'out'; a.path = null; a.with = null; a.room = null; a.after = null; a.carry = false; a.emoji = ''; a.what = 'Not in yet'; a.evac = null; a.under = false;
   }
   for (const r of rooms) r.mtg = null;
   renderRooms();
@@ -240,6 +294,8 @@ function newDay(placeNow){
   }
 }
 function sit(a){ a.state = 'seat'; a.x = a.seat.x; a.y = a.seat.y; a.path = null; a.emoji = ''; a.what = carrying(a) ? 'Having a coffee at their desk' : 'At their desk'; a.with = null; }
+// not on the map: not in today, or out of the building in a drill
+const offMap = a => a.state === 'out' || a.state === 'safe';
 // a cup in hand, from the machine until it's finished
 const carrying = a => a.carry && simMin < a.carryUntil;
 function walkTo(a, cell, then, what){
@@ -371,9 +427,10 @@ function leaveRoom(a){
 
 function update(dt){
   const realNow = performance.now() / 1000;
+  if (drilling()) drillUpdate(dt);
   for (const a of agents) {
     if (a.state === 'walk') {
-      const sp = WALK[mode] * dt;
+      const sp = (a.evac && drill ? drill.speed : WALK[mode]) * dt;
       let left = sp;
       while (left > 0 && a.path.length) {
         const w = a.path[0], dx = w.x - a.x, dy = w.y - a.y, d = Math.hypot(dx, dy);
@@ -381,7 +438,8 @@ function update(dt){
         else { a.x += dx / d * left; a.y += dy / d * left; left = 0; }
       }
       if (!a.path.length) arrive(a, realNow);
-    } else if (a.state === 'stay') {
+    } else if (drilling()) continue; // everyone's busy getting out
+    else if (a.state === 'stay') {
       if (simMin >= a.until && realNow >= a.minReal) {
         if (a.with) { const b = a.with; if (b.with === a) { b.with = null; if (b.state === 'seat') { b.emoji = ''; b.what = 'At their desk'; } } a.with = null; }
         if (a.room) leaveRoom(a);
@@ -390,10 +448,12 @@ function update(dt){
       }
     } else if (!paused) think(a);
   }
-  // a booking nobody is using any more frees the room
-  for (const r of rooms) if (r.mtg && simMin > r.mtg.until + 60) { r.mtg.people.forEach(m => { m.room = null; }); r.mtg = null; renderRooms(); }
-  // anniversary confetti, now and then, on the day itself
-  for (const a of agents) if (a.party && a.party.days === 0 && a.state !== 'out' && Math.random() < dt / 12) confetti(a.x, a.y, 30);
+  if (!drilling()) {
+    // a booking nobody is using any more frees the room
+    for (const r of rooms) if (r.mtg && simMin > r.mtg.until + 60) { r.mtg.people.forEach(m => { m.room = null; }); r.mtg = null; renderRooms(); }
+    // anniversary confetti, now and then, on the day itself
+    for (const a of agents) if (a.party && a.party.days === 0 && a.state !== 'out' && Math.random() < dt / 12) confetti(a.x, a.y, 30);
+  }
   for (const b of bits) { b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vx += b.gx * dt; b.vy += b.gy * dt; b.r += b.vr * dt; }
   bits = bits.filter(b => b.t < b.life);
 }
@@ -401,6 +461,8 @@ function arrive(a, realNow){
   const t = a.then || { kind: 'seat' };
   if (t.kind === 'seat') return sit(a);
   if (t.kind === 'out') { a.state = 'out'; a.what = a.away === 'lunch' ? 'Out for lunch' : 'Gone home'; return; }
+  // through the exit and out of the building: they're off the map until the drill is over
+  if (t.kind === 'safe') { a.state = 'safe'; a.emoji = ''; a.what = 'Outside the building'; if (drill) drill.lastSafe = drill.t; return; }
   a.state = 'stay'; a.emoji = t.emoji; a.what = t.what; a.after = t.after || null;
   a.until = simMin + t.minutes;
   a.minReal = realNow + Math.max(3, Math.min(t.minutes / rate(), 30)) ;
@@ -566,8 +628,10 @@ function render(now){
   ctx.clearRect(0, 0, cv.width, cv.height);
   if (!world || !mapImg) return;
   // squares to pixels: turned by view.ang about the middle of the view
-  const K = S * dpr, c = Math.cos(view.ang), s = Math.sin(view.ang);
-  const ox = W / 2 * dpr - K * (c * view.cx - s * view.cy), oy = H / 2 * dpr - K * (s * view.cx + c * view.cy), k = K / mapScale;
+  // an earthquake sways the view a little, slowly, rather than rattling it
+  const K = S * dpr, c = Math.cos(view.ang), s = Math.sin(view.ang), sh = shakeAmp() * 2.5 * dpr;
+  const ox = W / 2 * dpr - K * (c * view.cx - s * view.cy) + sh * (Math.sin(now * 13) + 0.5 * Math.sin(now * 7.3)),
+    oy = H / 2 * dpr - K * (s * view.cx + c * view.cy) + sh * (Math.cos(now * 11) + 0.5 * Math.sin(now * 5.9)), k = K / mapScale;
   ctx.imageSmoothingQuality = 'high';
   ctx.setTransform(k * c, k * s, -k * s, k * c, ox, oy);
   ctx.drawImage(mapImg, 0, 0);
@@ -595,17 +659,22 @@ function render(now){
     }
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
+  drawFire(now);
+  // while the plan is being edited, people step aside so the zones and routes are easy to see
+  if (edit.on) { drawPlan(); return; }
 
   for (const a of agents) {
-    if (a.state === 'out') continue;
+    if (offMap(a)) continue;
     const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
     ctx.save(); upright(a.x, a.y);
-    ctx.globalAlpha = 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(a.x, a.y + 0.28, 0.3, 0.12, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    // crouched down, taking cover, they look smaller
+    const crouch = a.state === 'cover', r = crouch ? 0.27 : 0.36;
+    ctx.globalAlpha = 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(a.x, a.y + 0.28, r * 0.83, 0.12, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     const followed = view.follow === a;
     if (followed) { ctx.strokeStyle = pal.accent; ctx.lineWidth = 0.09; ctx.beginPath(); ctx.arc(x, y, 0.58 + Math.sin(now * 4) * 0.04, 0, 7); ctx.stroke(); }
     ctx.fillStyle = F.teamColor(pal, a.ci); ctx.strokeStyle = pal.sheet; ctx.lineWidth = 0.08;
-    ctx.beginPath(); ctx.arc(x, y, 0.36, 0, 7); ctx.fill(); ctx.stroke();
-    if (S >= 18) { ctx.fillStyle = pal.sheet; ctx.font = '700 0.3px "Barlow", sans-serif'; ctx.fillText(a.ini, x, y + 0.01); }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+    if (S >= 18 && !crouch) { ctx.fillStyle = pal.sheet; ctx.font = '700 0.3px "Barlow", sans-serif'; ctx.fillText(a.ini, x, y + 0.01); }
     // names once you're close enough to read them, and always for the person you're following
     if (S >= 34 || followed && S >= 14) {
       ctx.font = `${followed ? 700 : 600} ${Math.max(0.3, 12 / S)}px "Barlow", sans-serif`;
@@ -617,14 +686,15 @@ function render(now){
     ctx.restore();
   }
   // emojis go on top of everyone, and never smaller than about 17 pixels
-  const E = Math.max(0.85, 17 / S);
+  const E = Math.max(0.85, 17 / S), EMOJI_STATES = new Set(['stay', 'cover', 'wait', 'trapped']);
   for (const a of agents) {
-    if (a.state === 'out') continue;
+    if (offMap(a)) continue;
     const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
-    if (!a.party && !(a.emoji && (a.state === 'stay' || a.with))) continue;
+    const showEmoji = a.emoji && (EMOJI_STATES.has(a.state) || a.with);
+    if (!a.party && !showEmoji) continue;
     ctx.save(); upright(a.x, a.y);
     if (a.party) { ctx.font = `${E * 0.85}px ${EMOJI}`; ctx.fillText('🎈', x + 0.3 + E * 0.25, y - 0.3 - E * 0.4 + Math.sin(now * 2 + a.phase) * 0.06); }
-    if (!a.emoji || !(a.state === 'stay' || a.with)) { ctx.restore(); continue; }
+    if (!showEmoji) { ctx.restore(); continue; }
     const top = y - 0.42 - E * 0.6;
     if (a.emoji === '💬') {
       // three dots that take turns
@@ -635,6 +705,12 @@ function render(now){
       ctx.globalAlpha = 1;
     } else { ctx.font = `${E}px ${EMOJI}`; ctx.fillText(a.emoji, x, top); }
     ctx.restore();
+  }
+  // in a drill, each exit shows how many have gone out through it
+  if (drilling()) {
+    const out = new Map();
+    for (const a of drill.people) if (a.state === 'safe' && a.evac) { const k = a.evac.exit.join(','); out.set(k, (out.get(k) || 0) + 1); }
+    for (const [k, n] of out) { const [x, y] = k.split(',').map(Number); pill(x + 0.5, y + 0.5, `✓ ${n} out`, pal.ok, 1, 13); }
   }
   for (const b of bits) { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.globalAlpha = 1 - b.t / b.life; ctx.fillStyle = b.c; ctx.fillRect(-0.08, -0.04, 0.16, 0.08); ctx.restore(); }
   ctx.globalAlpha = 1;
@@ -660,6 +736,583 @@ function confetti(x, y, n){
   }
 }
 
+/* ---------- the evacuation plan ---------- */
+// Zones drawn on the floor, each with a route: the squares to walk through, in order, the last one being its exit.
+// Nobody sees them except while editing the plan. Kept in this browser; it can also come from evacuation-plan.json
+// next to the page when the folder is served as a website, and be exported as that file.
+const PLAN_KEY = 'office-life:evacuation';
+let plan = { zones: [] }, planSrc = 'none';
+function cleanPlan(p){
+  if (!p || !Array.isArray(p.zones)) return null;
+  const int = v => Math.round(Number(v));
+  const zones = p.zones.filter(z => z && [z.x, z.y, z.w, z.h].every(v => isFinite(v)) && z.w >= 1 && z.h >= 1).map((z, i) => ({
+    id: String(z.id || 'ez' + i), name: String(z.name || 'Zone').slice(0, 40), x: int(z.x), y: int(z.y), w: int(z.w), h: int(z.h),
+    route: (Array.isArray(z.route) ? z.route : []).filter(q => Array.isArray(q) && isFinite(q[0]) && isFinite(q[1])).map(q => [int(q[0]), int(q[1])])
+  }));
+  return { zones };
+}
+async function loadPlan(){
+  try { const p = cleanPlan(JSON.parse(lsGet(PLAN_KEY))); if (p) { plan = p; planSrc = 'browser'; return; } } catch {}
+  if (/^https?:$/.test(location.protocol)) {
+    try { const r = await fetch('evacuation-plan.json', { cache: 'no-store' }); const p = r.ok && cleanPlan(await r.json()); if (p) { plan = p; planSrc = 'site'; } } catch {}
+  }
+}
+const planFile = () => ({ app: 'office-life', kind: 'evacuation-plan', version: 1, savedAt: new Date().toISOString(), zones: plan.zones });
+function savePlan(){ planSrc = 'browser'; lsSet(PLAN_KEY, JSON.stringify(planFile())); renderDrill(); }
+function exportPlan(){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(planFile(), null, 2)], { type: 'application/json' }));
+  a.download = 'evacuation-plan.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('#planIn').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let p = null;
+  try { p = cleanPlan(JSON.parse(await f.text())); } catch {}
+  if (!p) { alert('That file isn’t an evacuation plan.'); return; }
+  plan = p; edit.zone = null; edit.tool = null; savePlan(); renderEditor();
+});
+const inRect = (z, x, y) => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h;
+// the zone someone is standing in; where zones overlap, the smaller one
+const zoneAt = (x, y) => plan.zones.filter(z => inRect(z, x, y)).sort((a, b) => a.w * a.h - b.w * b.h)[0] || null;
+// how people walk a route: a leg from each point to the next (null where there's no way through)
+const legCache = new Map();
+function legs(z){
+  const key = JSON.stringify(z.route);
+  let L = legCache.get(key);
+  if (!L) {
+    L = z.route.slice(1).map(([bx, by], i) => world.route(z.route[i][0] + 0.5, z.route[i][1] + 0.5, bx, by));
+    if (legCache.size > 200) legCache.clear();
+    legCache.set(key, L);
+  }
+  return L;
+}
+// every way out: the doors in the outer walls, and where each zone's route ends
+const allExits = () => [...world.exits, ...plan.zones.filter(z => z.route.length).map(z => z.route[z.route.length - 1])];
+
+/* ---------- editing the plan ---------- */
+const edit = { on: false, tool: null, zone: null, draft: null, handle: null, hover: null, backup: null, wasWide: false, del: null };
+const zoneColor = i => pal.team[(i + 2) % 8];
+const zoneById = id => plan.zones.find(z => z.id === id) || null;
+// the floor square under a point, or the nearest one
+const snapCell = p => { const x = Math.floor(p.x), y = Math.floor(p.y); return world.onFloor(x, y) ? [x, y] : world.nearestFree(p.x, p.y); };
+function openEditor(){
+  if (drill) endDrill();
+  edit.on = true; edit.zone = null; edit.tool = plan.zones.length ? null : 'zone';
+  edit.wasWide = $('#main').classList.contains('wide');
+  if (edit.wasWide) { $('#main').classList.remove('wide'); requestAnimationFrame(layout); }
+  follow(null); $('#tip').hidden = true; $('#hint').hidden = true;
+  renderEditor();
+}
+function closeEditor(){
+  if (edit.tool === 'route') finishRoute();
+  edit.on = false; edit.tool = null; edit.draft = edit.handle = null; cv.style.cursor = '';
+  if (edit.wasWide) { $('#main').classList.add('wide'); requestAnimationFrame(layout); }
+  renderEditor(); renderDrill();
+}
+function setTool(tool, id){
+  if (edit.tool === 'route') finishRoute();
+  if (id) edit.zone = id;
+  edit.tool = tool; edit.draft = null;
+  // a new route replaces the old one; it comes back if nothing gets drawn
+  if (tool === 'route') { const z = zoneById(edit.zone); if (z) { edit.backup = z.route; z.route = []; } else edit.tool = null; }
+  renderEditor();
+}
+function finishRoute(){
+  const z = zoneById(edit.zone);
+  if (z && !z.route.length && edit.backup) z.route = edit.backup;
+  edit.tool = null; edit.backup = null; savePlan(); renderEditor();
+}
+function finishDraft(){
+  const d = edit.draft; edit.draft = null;
+  const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1), w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
+  if (w < 1 || h < 1) return renderEditor();
+  // Zone A, Zone B… whichever letter is free
+  const used = new Set(plan.zones.map(z => z.name));
+  const name = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map(c => 'Zone ' + c).find(n => !used.has(n)) || 'Zone ' + (plan.zones.length + 1);
+  const z = { id: 'ez' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, x, y, w, h, route: [] };
+  plan.zones.push(z); edit.tool = null; savePlan();
+  setTool('route', z.id);
+}
+function editClick(p){
+  if (edit.tool === 'route') {
+    const z = zoneById(edit.zone), c = snapCell(p), last = z?.route[z.route.length - 1];
+    if (z && c && !(last && last[0] === c[0] && last[1] === c[1])) { z.route.push(c); savePlan(); renderEditor(); }
+    return;
+  }
+  const z = plan.zones.filter(z => inRect(z, p.x, p.y)).sort((a, b) => a.w * a.h - b.w * b.h)[0];
+  edit.zone = z ? z.id : null; renderEditor();
+}
+// a route point or a corner of the chosen zone, near p
+function handleAt(p){
+  const z = zoneById(edit.zone);
+  if (!z) return null;
+  const r = Math.max(0.45, 11 / S);
+  for (let i = z.route.length - 1; i >= 0; i--) if (Math.hypot(z.route[i][0] + 0.5 - p.x, z.route[i][1] + 0.5 - p.y) < r) return { z, i };
+  for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    if (Math.hypot(z.x + cx * z.w - p.x, z.y + cy * z.h - p.y) < r) return { z, fx: z.x + (1 - cx) * z.w, fy: z.y + (1 - cy) * z.h };
+  }
+  return null;
+}
+function moveHandle(h, p){
+  if (h.i != null) { const c = snapCell(p); if (c) h.z.route[h.i] = c; return; }
+  // the opposite corner stays put
+  const x = Math.round(p.x), y = Math.round(p.y);
+  const x0 = Math.min(x, h.fx), x1 = Math.max(x, h.fx), y0 = Math.min(y, h.fy), y1 = Math.max(y, h.fy);
+  if (x1 - x0 >= 1 && y1 - y0 >= 1) Object.assign(h.z, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+}
+function deleteZone(id){
+  if (edit.del !== id) { edit.del = id; renderEditor(); setTimeout(() => { if (edit.del === id) { edit.del = null; renderEditor(); } }, 3000); return; }
+  plan.zones = plan.zones.filter(z => z.id !== id);
+  edit.del = null; if (edit.zone === id) { edit.zone = null; edit.tool = null; }
+  savePlan(); renderEditor();
+}
+function editKey(e){
+  if (e.key === 'Escape') {
+    if (edit.draft) edit.draft = null;
+    else if (edit.tool === 'route') finishRoute();
+    else if (edit.tool) setTool(null);
+    else if (edit.zone) { edit.zone = null; renderEditor(); }
+    else closeEditor();
+    return true;
+  }
+  if (e.key === 'Enter' && edit.tool === 'route') { finishRoute(); return true; }
+  if (e.key === 'Backspace' && edit.tool === 'route') { zoneById(edit.zone)?.route.pop(); savePlan(); renderEditor(); return true; }
+  return false;
+}
+// what a route looks like in the list: how far it is, or where it breaks
+function routeInfo(z){
+  const n = agents.filter(a => inRect(z, a.seat.x, a.seat.y)).length, who = `${n} ${n === 1 ? 'person sits' : 'people sit'} here. `;
+  if (!z.route.length) return { text: who + 'No route yet: they take the nearest exit.', bad: false };
+  const L = legs(z), broken = L.findIndex(l => !l);
+  if (broken >= 0) return { text: `No way through from point ${broken + 1} to ${broken + 2}. Move one of them.`, bad: true };
+  let len = 0, p = { x: z.route[0][0] + 0.5, y: z.route[0][1] + 0.5 };
+  for (const q of L.flat()) { len += Math.hypot(q.x - p.x, q.y - p.y); p = q; }
+  return { text: who + (z.route.length === 1 ? 'They go straight to its exit.' : `${z.route.length} points, ${Math.round(len * 0.4)} m from the first to the exit.`), bad: false };
+}
+function renderEditor(){
+  const st = $('#stage');
+  st.classList.toggle('editing', edit.on);
+  st.classList.toggle('tool-zone', edit.on && edit.tool === 'zone');
+  st.classList.toggle('tool-route', edit.on && edit.tool === 'route');
+  $('#planbar').hidden = !edit.on; $('#planPanel').hidden = !edit.on; $('#drillPanel').hidden = edit.on;
+  if (!edit.on) return;
+  const z = zoneById(edit.zone);
+  $('#planbar [data-plan="finish"]').hidden = edit.tool !== 'route';
+  $('#planbar [data-plan="zone"]').setAttribute('aria-pressed', String(edit.tool === 'zone'));
+  $('#planHint').textContent = edit.tool === 'zone' ? 'Drag on the map to cover the desks that share a way out. Esc cancels.'
+    : edit.tool === 'route' ? `Route for ${z.name}: click the way out, starting inside the zone and ending at its exit. Backspace takes back a point. Press Enter, double-click or Finish route at the exit.`
+    : !plan.zones.length ? 'Click ＋ Zone and drag on the map to draw the first zone.'
+    : z ? `Drag the corners to resize ${z.name}, or drag the route’s dots to move them. Esc to deselect.`
+    : 'Click a zone to change it. Zones and routes only show here, never while the office is running.';
+  $('#planNote').textContent = 'People take the route of the zone they’re standing in when the alarm goes off, and anyone outside every zone takes the nearest exit. '
+    + 'The plan is saved in this browser. To use it on another screen, export it and import it there, or put evacuation-plan.json next to the page on your site.';
+  if (document.activeElement?.matches?.('#zlist input')) return; // don't redraw the list under someone typing a name
+  $('#zlist').innerHTML = plan.zones.length ? plan.zones.map((z, i) => {
+    const info = routeInfo(z);
+    return `<li data-zsel="${esc(z.id)}"${z.id === edit.zone ? ' class="sel"' : ''}><span class="dot" style="background:${zoneColor(i)}"></span>`
+      + `<input data-zname="${esc(z.id)}" value="${esc(z.name)}" maxlength="40" aria-label="Zone name"><span class="m${info.bad ? ' bad' : ''}">${esc(info.text)}</span>`
+      + `<span class="row"><button class="btn small" type="button" data-plan="route" data-z="${esc(z.id)}">${z.route.length ? 'Redraw route' : 'Draw route'}</button>`
+      + `<button class="btn small danger" type="button" data-plan="del" data-z="${esc(z.id)}">${edit.del === z.id ? 'Delete it?' : 'Delete'}</button></span></li>`;
+  }).join('') : '<li class="empty">No zones yet.</li>';
+}
+$('#zlist').addEventListener('click', e => {
+  const li = e.target.closest('[data-zsel]');
+  if (!li || e.target.closest('button')) return;
+  if (edit.zone !== li.dataset.zsel) { if (edit.tool) setTool(null); edit.zone = li.dataset.zsel; }
+  if (e.target.closest('input')) { $('#zlist').querySelectorAll('li').forEach(l => l.classList.toggle('sel', l === li)); renderEditor(); }
+  else renderEditor();
+});
+$('#zlist').addEventListener('input', e => { const z = zoneById(e.target.dataset.zname); if (z) { z.name = e.target.value; savePlan(); } });
+$('#zlist').addEventListener('change', e => { const z = zoneById(e.target.dataset.zname); if (z && !z.name.trim()) { z.name = 'Zone'; savePlan(); } e.target.blur(); renderEditor(); });
+$('#zlist').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
+$('#zlist').addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement?.matches?.('#zlist input')) renderEditor(); }, 0));
+
+// a pill with writing on it, upright, centred on x,y, its writing about px pixels tall
+function pill(x, y, text, fill, alpha = 1, px = 10){
+  const fs = Math.max(0.42, px / S);
+  ctx.save(); upright(x, y); ctx.globalAlpha = alpha;
+  ctx.font = `700 ${fs}px "Barlow", sans-serif`;
+  const w = ctx.measureText(text).width + fs * 1.1, h = fs * 1.55;
+  ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2); ctx.fill();
+  ctx.fillStyle = pal.sheet; ctx.fillText(text, x, y + fs * 0.06);
+  ctx.restore();
+}
+function arrowHead(a, b, color, size){
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  if (d < 1e-6) return;
+  const ux = (b.x - a.x) / d, uy = (b.y - a.y) / d;
+  ctx.fillStyle = color; ctx.beginPath();
+  ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - ux * size - uy * size * 0.6, b.y - uy * size + ux * size * 0.6); ctx.lineTo(b.x - ux * size + uy * size * 0.6, b.y - uy * size - ux * size * 0.6);
+  ctx.closePath(); ctx.fill();
+}
+function drawPlan(){
+  const px = 1 / S;
+  // the doors in the outer walls are ways out even without a plan
+  for (const [x, y] of world.exits) pill(x + 0.5, y + 0.5, 'EXIT', pal.ok, 0.55);
+  plan.zones.forEach((z, i) => {
+    const c = zoneColor(i), sel = z.id === edit.zone, R = Math.max(0.24, 6 * px);
+    ctx.globalAlpha = sel ? 0.2 : 0.12; ctx.fillStyle = c; ctx.fillRect(z.x, z.y, z.w, z.h);
+    ctx.globalAlpha = 1; ctx.strokeStyle = c; ctx.lineWidth = (sel ? 3 : 1.6) * px;
+    ctx.setLineDash(sel ? [] : [6 * px, 4 * px]); ctx.strokeRect(z.x, z.y, z.w, z.h); ctx.setLineDash([]);
+    ctx.save(); upright(z.x + z.w / 2, z.y + z.h / 2);
+    ctx.font = `700 ${Math.max(0.6, 14 * px)}px "Barlow Condensed", sans-serif`; ctx.lineWidth = 4 * px; ctx.strokeStyle = pal.sheet; ctx.lineJoin = 'round';
+    ctx.strokeText(z.name.toUpperCase(), z.x + z.w / 2, z.y + z.h / 2); ctx.fillStyle = c; ctx.fillText(z.name.toUpperCase(), z.x + z.w / 2, z.y + z.h / 2);
+    ctx.restore();
+    // the route, the way people will actually walk it
+    const R0 = z.route, L = legs(z), alpha = sel || !edit.zone ? 1 : 0.45;
+    ctx.globalAlpha = alpha; ctx.lineWidth = (sel ? 3.5 : 2.5) * px; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    L.forEach((leg, k) => {
+      const a = { x: R0[k][0] + 0.5, y: R0[k][1] + 0.5 }, b = { x: R0[k + 1][0] + 0.5, y: R0[k + 1][1] + 0.5 };
+      if (!leg) { ctx.strokeStyle = pal.danger; ctx.setLineDash([5 * px, 4 * px]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]); return; }
+      ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(a.x, a.y); for (const q of leg) ctx.lineTo(q.x, q.y); ctx.stroke();
+      // an arrow just short of the next point
+      const pts = [a, ...leg], end = pts[pts.length - 1], from = pts[pts.length - 2] || a, d = Math.hypot(end.x - from.x, end.y - from.y);
+      if (d > R * 2.5) arrowHead(from, { x: end.x - (end.x - from.x) / d * R * 1.4, y: end.y - (end.y - from.y) / d * R * 1.4 }, c, Math.max(0.35, 9 * px));
+    });
+    R0.forEach(([x, y], k) => {
+      if (k === R0.length - 1) return pill(x + 0.5, y + 0.5, 'EXIT', c, alpha);
+      ctx.globalAlpha = alpha; ctx.fillStyle = pal.surface; ctx.strokeStyle = c; ctx.lineWidth = 2.5 * px;
+      ctx.beginPath(); ctx.arc(x + 0.5, y + 0.5, R, 0, 7); ctx.fill(); ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+    // drawing it: a line from the last point to the pointer
+    if (sel && edit.tool === 'route' && edit.hover) {
+      const h = snapCell(edit.hover), last = R0[R0.length - 1];
+      if (h && last) { ctx.strokeStyle = c; ctx.lineWidth = 2 * px; ctx.setLineDash([5 * px, 4 * px]); ctx.beginPath(); ctx.moveTo(last[0] + 0.5, last[1] + 0.5); ctx.lineTo(h[0] + 0.5, h[1] + 0.5); ctx.stroke(); ctx.setLineDash([]); }
+      if (h) { ctx.globalAlpha = 0.6; ctx.strokeStyle = c; ctx.lineWidth = 2 * px; ctx.beginPath(); ctx.arc(h[0] + 0.5, h[1] + 0.5, R, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+    }
+    // corners to resize it
+    if (sel && !edit.tool) for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const hs = Math.max(0.22, 5 * px);
+      ctx.fillStyle = pal.surface; ctx.strokeStyle = c; ctx.lineWidth = 2 * px;
+      ctx.fillRect(z.x + cx * z.w - hs, z.y + cy * z.h - hs, hs * 2, hs * 2); ctx.strokeRect(z.x + cx * z.w - hs, z.y + cy * z.h - hs, hs * 2, hs * 2);
+    }
+  });
+  if (edit.draft) {
+    const d = edit.draft, x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1);
+    ctx.globalAlpha = 0.15; ctx.fillStyle = pal.accent; ctx.fillRect(x, y, Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
+    ctx.globalAlpha = 1; ctx.strokeStyle = pal.accent; ctx.lineWidth = 2 * px; ctx.strokeRect(x, y, Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
+  }
+}
+
+/* ---------- emergency drills ---------- */
+// A drill plays out in real seconds, at a walking pace of about 1.1 m/s (earthquake) or 1.4 m/s (fire), so the time it
+// shows is close to how long getting everyone out would really take. An earthquake starts with an alert: people head
+// out while it sounds, and whoever is still inside when the shaking starts drops and covers until it stops.
+const DRILL_WALK = { quake: 2.8, fire: 3.4 }, ALERT_FOR = 30, SHAKE_FOR = 8;
+const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let drill = null;
+const drilling = () => !!drill && drill.phase !== 'pick';
+const mmss = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const drillCount = st => { let n = 0; for (const a of drill.people) if (a.state === st) n++; return n; };
+// where something is, in words: the area it's in, or the nearest desk
+function placeName([x, y]){
+  const z = world.zones.find(z => z.name && x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+  if (z) return 'in ' + z.name;
+  let best = null, bd = Infinity;
+  for (const d of world.desks) { const dd = Math.hypot(d.cx - x - 0.5, d.cy - y - 0.5); if (d.number !== '' && dd < bd) { bd = dd; best = d; } }
+  return best ? 'near desk ' + best.number : 'in the office';
+}
+function pickFire(){
+  if (edit.on) closeEditor();
+  if (!agents.some(a => a.state !== 'out')) return;
+  drill = { kind: 'fire', phase: 'pick', people: new Set(), t: 0 };
+  follow(null); stageClass(); renderDrill(); renderBanner();
+}
+function startDrill(kind, fireCell){
+  if (drilling()) return;
+  if (edit.on) closeEditor();
+  const people = agents.filter(a => a.state !== 'out');
+  if (!people.length || kind === 'fire' && !fireCell) { drill = null; stageClass(); renderDrill(); renderBanner(); return; }
+  drill = { kind, t: 0, phase: kind === 'quake' ? 'alert' : 'evacuate', people: new Set(people), speed: DRILL_WALK[kind], doneAt: 0, lastSafe: 0, shakeAt: 0, caught: 0, fire: null };
+  for (const r of rooms) r.mtg = null;
+  renderRooms();
+  for (const a of people) {
+    // everyone drops what they were doing, coffee included, and heads out after a moment to take it in
+    a.with = null; a.room = null; a.after = null; a.then = null; a.path = null; a.carry = false; a.evac = null;
+    a.state = 'wait'; a.goAt = rand(0.5, 4); a.emoji = '😮'; a.what = kind === 'quake' ? 'Heard the earthquake alert' : 'Heard the alarm';
+  }
+  if (kind === 'fire') { lightFire(fireCell); log(`Fire alarm! A fire broke out ${placeName(fireCell)}. Everyone out`); }
+  else log('Earthquake alert! Everyone heads for the exits');
+  stageClass(); renderDrill(); renderBanner();
+}
+function drillUpdate(dt){
+  const d = drill;
+  d.t += dt;
+  if (d.phase === 'alert' && d.t >= ALERT_FOR) {
+    // the earthquake arrives: anyone still inside drops, covers and holds on (under their desk if they're at it);
+    // anyone already outside carries on to the meeting point
+    d.phase = 'shake'; d.shakeAt = d.t;
+    for (const a of d.people) {
+      if (a.state === 'safe' || a.state === 'trapped' || !world.indoors(Math.floor(a.x), Math.floor(a.y))) continue;
+      a.under = Math.hypot(a.x - a.seat.x, a.y - a.seat.y) < 0.5;
+      if (a.under) { a.x = a.seat.x + a.seat.fx * 0.3; a.y = a.seat.y + a.seat.fy * 0.3; }
+      a.state = 'cover'; a.path = null; a.evac = null; a.emoji = Math.random() < 0.5 ? '😬' : '';
+      a.what = a.under ? 'Under their desk, holding on' : 'Down on the floor, covering their head';
+      d.caught++;
+    }
+    log(d.caught ? `The earthquake hit. ${d.caught} still inside drop, cover and hold on` : 'The earthquake hit. Everyone was already out');
+    stageClass();
+  }
+  if (d.phase === 'shake') {
+    if (Math.random() < dt * 12 * shakeAmp()) dust();
+    if (d.t >= d.shakeAt + SHAKE_FOR) {
+      d.phase = 'evacuate';
+      for (const a of d.people) if (a.state === 'cover') { a.state = 'wait'; a.goAt = d.t + rand(1, 4); a.emoji = ''; a.what = 'Getting up, the shaking has stopped'; }
+      if (d.caught) log('The shaking has stopped. Everyone left inside heads out');
+      stageClass();
+    }
+  }
+  if (d.fire) spreadFire();
+  for (const a of d.people) if (a.state === 'wait' && d.t >= a.goAt) evacuate(a);
+  // over once everyone is out (and, for an earthquake, the shaking is over too)
+  if (d.phase === 'evacuate' && [...d.people].every(a => a.state === 'safe' || a.state === 'trapped')) {
+    d.phase = 'done'; d.doneAt = d.lastSafe || d.t;
+    const lost = drillCount('trapped'), n = d.people.size, early = d.kind === 'quake' && !d.caught;
+    log(lost ? `${n - lost} of ${n} got out in ${mmss(d.doneAt)}. ${lost} couldn’t`
+      : `Everyone is out, in ${mmss(d.doneAt)}${early ? ', before the shaking started' : ''}`);
+    stageClass();
+  }
+  // a wall screen goes back to normal by itself
+  if (d.phase === 'done' && d.t - d.doneAt > 30) endDrill();
+}
+function endDrill(){
+  const d = drill;
+  if (!d) return;
+  drill = null;
+  if (d.phase !== 'pick') {
+    for (const a of d.people) {
+      a.evac = null; a.under = false; a.emoji = ''; a.then = null;
+      if (!goHome(a, 'Back to work after the drill')) sit(a);
+      a.next = simMin + rand(10, 30);
+    }
+    if (d.phase !== 'done') log('Drill stopped');
+  }
+  bits = bits.filter(b => !b.dust);
+  stageClass(); renderDrill(); renderBanner();
+}
+function stageClass(){
+  const s = $('#stage'), d = drilling() ? drill : null;
+  s.classList.toggle('drilling', !!drill);
+  s.classList.toggle('pick', drill?.phase === 'pick');
+  s.classList.toggle('alarm-fire', !!d && d.kind === 'fire' && d.phase !== 'done');
+  s.classList.toggle('alarm-quake', !!d && d.kind === 'quake' && (d.phase === 'alert' || d.phase === 'shake'));
+  s.classList.toggle('shaking', !!d && d.phase === 'shake');
+}
+// how hard the floor shakes right now, 0 to 1: building up, then dying away
+function shakeAmp(){
+  if (!drilling() || drill.phase !== 'shake' || reduceMotion.matches) return 0;
+  const t = drill.t - drill.shakeAt;
+  return Math.min(1, t / 1.5) * Math.max(0, Math.min(1, (SHAKE_FOR - t) / 3));
+}
+function dust(){
+  const [x, y] = pick(floorCells) || [0, 0];
+  for (let i = 0; i < 4; i++) bits.push({ x: x + rand(0, 1), y: y + rand(0, 1), vx: rand(-0.4, 0.4), vy: rand(-0.4, 0.4), gx: 0, gy: 0, r: rand(0, 6), vr: rand(-3, 3), t: 0, life: rand(1, 2.2), c: pal.muted, dust: true });
+}
+
+// The way out for someone: their zone's route, joined at its nearest point, or the nearest exit. In a fire, any
+// way that runs into the flames is dropped for the shortest one round them.
+function evacuate(a){
+  const way = evacPath(a);
+  if (!way) return trapped(a);
+  a.state = 'walk'; a.path = way.path; a.then = { kind: 'safe' }; a.evac = way; a.emoji = ''; a.under = false;
+  a.what = way.zone ? `Following the ${way.zone.name} route out` : 'Heading for the nearest exit';
+}
+function evacPath(a){
+  const z = zoneAt(a.x, a.y), s = world.nearestFree(a.x, a.y);
+  if (z && z.route.length && s) {
+    let k = -1, bd = Infinity;
+    z.route.forEach(([x, y], i) => { const d = world.distance(s[0], s[1], x, y); if (d < bd) { bd = d; k = i; } });
+    const first = k >= 0 && world.route(a.x, a.y, z.route[k][0], z.route[k][1]), rest = legs(z).slice(k);
+    if (first && rest.every(Boolean)) {
+      const way = { path: [...first, ...rest.flat()], exit: z.route[z.route.length - 1], zone: z };
+      if (!drill.fire || !pathHot(way.path, a)) return way;
+    }
+  }
+  return drill.fire ? escapeRoute(a) : nearestExit(a);
+}
+function nearestExit(a){
+  const s = world.nearestFree(a.x, a.y);
+  if (!s) return null;
+  let best = null, bd = Infinity;
+  for (const e of allExits()) { const d = world.distance(s[0], s[1], e[0], e[1]); if (d < bd) { bd = d; best = e; } }
+  const path = best && world.route(a.x, a.y, best[0], best[1]);
+  return path ? { path, exit: best, zone: null } : null;
+}
+function trapped(a){
+  a.state = 'trapped'; a.path = null; a.evac = null; a.emoji = '🆘';
+  a.what = drill.fire ? 'Cut off by the fire, waiting for help' : 'Can’t find a way out, waiting for help';
+  log(drill.fire ? `${a.name} is cut off by the fire` : `${a.name} can’t find a way out`, a);
+}
+
+/* fire: it spreads square by square, not through walls and not outdoors, up to a size that suits the office */
+function lightFire([x, y]){
+  const N = world.cols * world.rows;
+  drill.fire = { burning: new Uint8Array(N), hot: new Uint8Array(N), list: [], next: 1.4, origin: [x, y], max: clamp(Math.round(floorCells.length * 0.12), 30, 260) };
+  ignite(x, y);
+}
+function ignite(x, y){
+  const f = drill.fire, { cols, rows } = world;
+  if (f.burning[y * cols + x]) return;
+  f.burning[y * cols + x] = 1; f.list.push({ x, y, at: drill.t, ph: rand(0, 6) });
+  for (let yy = y - 1; yy <= y + 1; yy++) for (let xx = x - 1; xx <= x + 1; xx++) if (xx >= 0 && yy >= 0 && xx < cols && yy < rows) f.hot[yy * cols + xx] = 1;
+}
+const isBurning = (x, y) => !!drill?.fire && x >= 0 && y >= 0 && x < world.cols && y < world.rows && drill.fire.burning[y * world.cols + x] === 1;
+function spreadFire(){
+  const f = drill.fire;
+  if (drill.t < f.next || f.list.length >= f.max || drill.t > 150) return;
+  f.next = drill.t + 1.8;
+  for (const c of f.list.slice()) for (let k = 0; k < 4; k++) {
+    const [dx, dy] = STEPS[k], x = c.x + dx, y = c.y + dy;
+    if (x < 0 || y < 0 || x >= world.cols || y >= world.rows || isBurning(x, y) || f.list.length >= f.max) continue;
+    if (world.wallBetween(c.x, c.y, dx, dy) || world.onFloor(x, y) && !world.indoors(x, y)) continue;
+    if (Math.random() < 0.35) ignite(x, y);
+  }
+  // anyone whose way out now runs into the fire looks for another
+  for (const a of drill.people) if (a.state === 'walk' && a.evac && pathHot(a.path, a)) {
+    const before = a.evac.exit, way = escapeRoute(a);
+    if (!way) { trapped(a); continue; }
+    a.path = way.path; a.evac = way; a.what = 'Taking another way round the fire';
+    log(Math.hypot(way.exit[0] - before[0], way.exit[1] - before[1]) > 3 ? `${a.name} found the way blocked and took another exit` : `${a.name} went round the fire`, a);
+  }
+}
+// does walking this path, from where a is, go through a burning square?
+function pathHot(path, a){
+  let px = a.x, py = a.y;
+  for (const p of path) {
+    const n = Math.ceil(Math.hypot(p.x - px, p.y - py) / 0.3);
+    for (let i = 1; i <= n; i++) if (isBurning(Math.floor(px + (p.x - px) * i / n), Math.floor(py + (p.y - py) * i / n))) return true;
+    px = p.x; py = p.y;
+  }
+  return false;
+}
+// the shortest way to any exit that doesn't go through the fire, keeping away from it where possible
+function escapeRoute(a){
+  const { cols, rows } = world, f = drill.fire, s = world.nearestFree(a.x, a.y);
+  if (!s) return null;
+  const goal = new Set(allExits().filter(([x, y]) => world.onFloor(x, y) && !isBurning(x, y)).map(([x, y]) => y * cols + x));
+  const start = s[1] * cols + s[0], dist = new Float64Array(cols * rows).fill(Infinity), prev = new Int32Array(cols * rows).fill(-1), heap = [[0, start]];
+  dist[start] = 0;
+  let end = -1;
+  while (heap.length) {
+    const [dc, c] = F.heapPop(heap);
+    if (dc > dist[c]) continue;
+    if (goal.has(c)) { end = c; break; }
+    const x = c % cols, y = (c - x) / cols;
+    for (const [dx, dy] of STEPS) {
+      if (!world.canMove(x, y, dx, dy)) continue;
+      const n = c + dy * cols + dx;
+      if (f.burning[n]) continue;
+      const nd = dc + (dx && dy ? 1.4142 : 1) + (f.hot[n] ? 4 : 0);
+      if (nd < dist[n]) { dist[n] = nd; prev[n] = c; F.heapPush(heap, [nd, n]); }
+    }
+  }
+  if (end < 0) return null;
+  const cells = [];
+  for (let c = end; c !== start && c >= 0; c = prev[c]) cells.push({ x: c % cols + 0.5, y: Math.floor(c / cols) + 0.5 });
+  cells.reverse();
+  const smooth = world.smooth({ x: a.x, y: a.y }, cells);
+  return { path: pathHot(smooth, a) ? cells : smooth, exit: [end % cols, Math.floor(end / cols)], zone: null };
+}
+function randomFireCell(){
+  const ex = allExits(), far = floorCells.filter(([x, y]) => ex.every(e => Math.hypot(x - e[0], y - e[1]) > 8));
+  return pick(far.length ? far : floorCells);
+}
+// the square clicked, if it's inside the office, or the nearest one that is
+function fireCellAt(p){
+  const x = Math.floor(p.x), y = Math.floor(p.y);
+  if (world.indoors(x, y) || world.isBlocked(x, y) && x >= 0 && y >= 0 && x < world.cols && y < world.rows) return [x, y];
+  let best = null, bd = Infinity;
+  for (const c of floorCells) { const d = Math.hypot(c[0] - x, c[1] - y); if (d < bd) { bd = d; best = c; } }
+  return best;
+}
+function drawFire(now){
+  const f = drill?.fire;
+  if (!f) return;
+  // smoke first, then the flames
+  const ox = f.origin[0] + 0.5, oy = f.origin[1] + 0.5, R = 3 + Math.sqrt(f.list.length) * 1.6;
+  const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, R);
+  g.addColorStop(0, pal.dark ? 'rgba(0,0,0,.5)' : 'rgba(45,45,45,.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(ox - R, oy - R, R * 2, R * 2);
+  for (const c of f.list) {
+    const grow = Math.min(1, (drill.t - c.at) / 1.2);
+    ctx.globalAlpha = (0.4 + 0.2 * Math.sin(now * 9 + c.ph)) * grow + 0.1;
+    ctx.fillStyle = drill.t - c.at < 3 ? '#ffb02e' : '#e8501c'; ctx.fillRect(c.x, c.y, 1, 1);
+  }
+  ctx.globalAlpha = 1;
+  const E = Math.max(0.8, 15 / S), every = Math.max(3, Math.ceil(E * 2.5));
+  for (const c of f.list) {
+    if (c !== f.list[0] && (c.x * 7 + c.y * 13) % every) continue;
+    const size = E * (0.85 + 0.15 * Math.sin(now * 11 + c.ph)) * Math.min(1, (drill.t - c.at) / 1.2);
+    ctx.save(); upright(c.x + 0.5, c.y + 0.5); ctx.font = `${size}px ${EMOJI}`; ctx.fillText('🔥', c.x + 0.5, c.y + 0.5); ctx.restore();
+  }
+}
+
+/* the banner on the map and the panel at the side */
+let shownBanner = null, shownDrill = null;
+function renderBanner(){
+  const d = drill;
+  let html = '';
+  if (d?.phase === 'pick') html = '<b>🔥 Fire drill</b><span>Click where the fire starts</span><button class="btn small" type="button" data-drill="random">Somewhere random</button><button class="btn small" type="button" data-drill="cancel">Cancel</button>';
+  else if (d) {
+    const n = d.people.size, safe = drillCount('safe'), lost = drillCount('trapped');
+    const title = d.phase === 'alert' ? '🚨 Earthquake alert' : d.phase === 'shake' ? '🌍 Earthquake' : d.phase === 'done' ? (lost ? `⚠️ ${safe} of ${n} out` : '✅ Everyone is out') : d.kind === 'fire' ? '🔥 Fire drill' : '🌍 Earthquake drill';
+    const msg = d.phase === 'alert' ? `${safe} of ${n} out · shaking in ${Math.ceil(ALERT_FOR - d.t)} s`
+      : d.phase === 'shake' ? `${d.caught ? 'Drop, cover and hold on · ' : ''}${safe} of ${n} out`
+      : d.phase === 'done' ? `in ${mmss(d.doneAt)}${lost ? ` · ${lost} couldn’t get out` : ''}` : `${safe} of ${n} out${lost ? ` · ${lost} stuck` : ''}`;
+    html = `<b>${title}</b><span>${msg}</span>${d.phase !== 'done' ? `<span class="t">${mmss(d.t)}</span>` : ''}<button class="btn small" type="button" data-drill="end">${d.phase === 'done' ? 'Back to work' : 'End drill'}</button>`;
+  }
+  if (html === shownBanner) return;
+  shownBanner = html;
+  $('#drillbar').innerHTML = html; $('#drillbar').hidden = !html;
+}
+function renderDrill(){
+  if (!world) return;
+  const d = drill;
+  let html;
+  if (d?.phase === 'pick') html = '<p class="m">Click the map where the fire starts.</p><div class="row"><button class="btn small" type="button" data-drill="random">Somewhere random</button><button class="btn small" type="button" data-drill="cancel">Cancel</button></div>';
+  else if (d) {
+    const people = [...d.people], n = people.length, safe = drillCount('safe');
+    const names = st => { const l = people.filter(a => a.state === st || st === 'inside' && a.state !== 'safe' && a.state !== 'trapped'); return l.length > 6 ? l.slice(0, 5).map(a => a.name).join(', ') + ` and ${l.length - 5} more` : l.map(a => a.name).join(', '); };
+    const inside = names('inside'), cut = names('trapped');
+    html = `<p class="big">${safe} of ${n} out · ${mmss(d.phase === 'done' ? d.doneAt : d.t)}</p>`
+      + (inside ? `<p class="m">Still inside: ${esc(inside)}</p>` : '')
+      + (cut ? `<p class="m" style="color:var(--danger)">Couldn’t get out: ${esc(cut)}</p>` : '')
+      + `<button class="btn small" type="button" data-drill="end">${d.phase === 'done' ? 'Back to work' : 'End drill'}</button>`;
+  } else {
+    const inn = agents.some(a => a.state !== 'out'), zs = plan.zones, routed = zs.filter(z => z.route.length).length;
+    html = `<div class="drills"><button class="btn" type="button" data-drill="quake"${inn ? '' : ' disabled'}>🌍 Earthquake</button><button class="btn" type="button" data-drill="fire"${inn ? '' : ' disabled'}>🔥 Fire</button></div>`
+      + (inn ? '' : '<p class="m">Nobody’s in right now. Try Fast day.</p>')
+      + `<p class="m">${zs.length ? `${zs.length} evacuation zone${zs.length > 1 ? 's' : ''}, ${routed} with a route. Anyone outside them takes the nearest exit.` : 'No evacuation plan yet, so everyone takes the nearest exit.'}${planSrc === 'site' ? ' The plan is evacuation-plan.json from this site.' : ''}</p>`
+      + '<button class="btn small" type="button" data-plan="open">Edit the evacuation plan</button>';
+  }
+  if (html === shownDrill) return;
+  shownDrill = html;
+  $('#drillBody').innerHTML = html;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-plan],[data-drill]');
+  if (!b || b.disabled) return;
+  const id = b.dataset.z;
+  switch (b.dataset.plan || 'drill:' + b.dataset.drill) {
+    case 'open': openEditor(); break;
+    case 'done': closeEditor(); break;
+    case 'zone': setTool(edit.tool === 'zone' ? null : 'zone'); break;
+    case 'finish': finishRoute(); break;
+    case 'route': setTool('route', id); break;
+    case 'del': deleteZone(id); break;
+    case 'export': exportPlan(); break;
+    case 'import': $('#planIn').click(); break;
+    case 'drill:quake': startDrill('quake'); break;
+    case 'drill:fire': pickFire(); break;
+    case 'drill:random': startDrill('fire', randomFireCell()); break;
+    case 'drill:cancel': case 'drill:end': endDrill(); break;
+  }
+});
+
 /* ---------- header ---------- */
 let shownTime = '';
 function renderClock(){
@@ -668,7 +1321,7 @@ function renderClock(){
     shownTime = t; $('#time').textContent = t;
     const inn = agents.filter(a => a.state !== 'out').length;
     $('#day').textContent = `${mode === 'live' ? new Date().toLocaleDateString(undefined, { weekday: 'long' }) : 'Day ' + (simDay + 1)} · ${inn} of ${agents.length} in`;
-    renderRooms();
+    renderRooms(); renderDrill();
   }
 }
 function renderControls(){
@@ -696,11 +1349,13 @@ $('#fileIn').addEventListener('change', async e => {
 });
 addEventListener('keydown', e => {
   if (e.target.closest?.('input,textarea,select') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (edit.on && editKey(e)) { e.preventDefault(); return; }
+  if (drill?.phase === 'pick' && e.key === 'Escape') { endDrill(); return; }
   if (e.code === 'Space') {
     if (e.target.closest?.('button,a')) return; paused = !paused; renderControls(); e.preventDefault(); }
   else if (e.code === 'KeyF') $('#fullBtn').click();
   else if (e.code === 'KeyH') $('#sideBtn').click();
-  else if (e.code === 'KeyR') followSomeone();
+  else if (e.code === 'KeyR' && !edit.on) followSomeone();
   else if (e.code === 'KeyT') turnView();
   else if (e.code === 'Escape') follow(null);
   else if (e.key === '+' || e.key === '=') $('#zoomIn').click();
@@ -712,7 +1367,7 @@ addEventListener('keydown', e => {
 function personAt(e){
   const r = cv.getBoundingClientRect(), p = toWorld(e.clientX - r.left, e.clientY - r.top);
   let best = null, bd = Math.max(0.7, 14 / S);
-  for (const a of agents) if (a.state !== 'out') { const d = Math.hypot(a.x - p.x, a.y - p.y); if (d < bd) { bd = d; best = a; } }
+  for (const a of agents) if (!offMap(a)) { const d = Math.hypot(a.x - p.x, a.y - p.y); if (d < bd) { bd = d; best = a; } }
   return best;
 }
 // hover a person to see who it is and what they're up to
@@ -730,18 +1385,31 @@ function showTip(e){
 // click someone to follow them, click the floor to stop; drag to look around; wheel or pinch to zoom
 const touches = new Map();
 let drag = null, pinch = null;
+const pointerWorld = e => { const r = cv.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top); };
 cv.addEventListener('pointerdown', e => {
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
   cv.setPointerCapture(e.pointerId);
+  // editing the plan: drag out a zone, or grab a corner or a route point
+  if (edit.on && touches.size === 1) {
+    const p = pointerWorld(e);
+    if (edit.tool === 'zone') { const x = Math.round(p.x), y = Math.round(p.y); edit.draft = { x0: x, y0: y, x1: x, y1: y }; return; }
+    if (!edit.tool) { const h = handleAt(p); if (h) { edit.handle = h; return; } }
+  }
   if (touches.size === 1) drag = { x: e.clientX, y: e.clientY, cx: view.cx, cy: view.cy, moved: false };
   else if (touches.size === 2) {
     const [p, q] = [...touches.values()];
-    pinch = { d: Math.hypot(p.x - q.x, p.y - q.y), zoom: view.zoom }; drag = null;
+    pinch = { d: Math.hypot(p.x - q.x, p.y - q.y), zoom: view.zoom }; drag = null; edit.draft = edit.handle = null;
   }
 });
 cv.addEventListener('pointermove', e => {
-  if (!touches.has(e.pointerId)) { if (e.pointerType === 'mouse') showTip(e); return; }
+  if (edit.on && e.pointerType === 'mouse') {
+    edit.hover = pointerWorld(e);
+    if (!edit.tool && !touches.size) cv.style.cursor = handleAt(edit.hover) ? 'move' : '';
+  }
+  if (!touches.has(e.pointerId)) { if (e.pointerType === 'mouse' && !edit.on) showTip(e); return; }
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (edit.draft) { const p = pointerWorld(e); edit.draft.x1 = Math.round(p.x); edit.draft.y1 = Math.round(p.y); return; }
+  if (edit.handle) { moveHandle(edit.handle, pointerWorld(e)); return; }
   if (pinch && touches.size === 2) {
     const [p, q] = [...touches.values()], r = cv.getBoundingClientRect();
     setZoom(pinch.zoom * Math.hypot(p.x - q.x, p.y - q.y) / pinch.d, (p.x + q.x) / 2 - r.left, (p.y + q.y) / 2 - r.top);
@@ -754,7 +1422,11 @@ cv.addEventListener('pointermove', e => {
 function pointerEnd(e){
   if (!touches.has(e.pointerId)) return;
   touches.delete(e.pointerId);
-  if (drag && !drag.moved && e.type === 'pointerup') {
+  if (edit.draft) { if (e.type === 'pointerup') finishDraft(); else edit.draft = null; }
+  else if (edit.handle) { edit.handle = null; savePlan(); renderEditor(); }
+  else if (drag && !drag.moved && e.type === 'pointerup' && edit.on) editClick(pointerWorld(e));
+  else if (drag && !drag.moved && e.type === 'pointerup' && drill?.phase === 'pick') startDrill('fire', fireCellAt(pointerWorld(e)));
+  else if (drag && !drag.moved && e.type === 'pointerup') {
     const a = personAt(e);
     follow(a && a !== view.follow ? a : null);
     if (a && e.pointerType !== 'mouse') showTip(e); else $('#tip').hidden = true;
@@ -764,7 +1436,8 @@ function pointerEnd(e){
 }
 cv.addEventListener('pointerup', pointerEnd);
 cv.addEventListener('pointercancel', pointerEnd);
-cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') $('#tip').hidden = true; });
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { $('#tip').hidden = true; edit.hover = null; } });
+cv.addEventListener('dblclick', () => { if (edit.on && edit.tool === 'route') finishRoute(); });
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   const r = cv.getBoundingClientRect();
@@ -776,7 +1449,7 @@ $('#zoomFit').addEventListener('click', () => { follow(null); view.zt = 1; });
 $('#turnBtn').addEventListener('click', turnView);
 $('#followBtn').addEventListener('click', followSomeone);
 function followSomeone(){
-  const inn = agents.filter(a => a.state !== 'out' && a !== view.follow);
+  const inn = agents.filter(a => !offMap(a) && a !== view.follow);
   // someone up and about is more fun to watch than someone at their desk
   const busy = inn.filter(a => a.state !== 'seat');
   if (inn.length) follow(pick(busy.length && Math.random() < 0.8 ? busy : inn));
@@ -806,6 +1479,7 @@ function frame(t){
     moveCamera(dt);
     render(t / 1000);
     renderClock(); renderFollow();
+    if (drill) { renderDrill(); renderBanner(); }
   }
   requestAnimationFrame(frame);
 }
@@ -813,7 +1487,7 @@ function frame(t){
 (async () => {
   if (lsGet(sideKey) === '0') $('#main').classList.add('wide');
   renderControls();
-  const { data, source } = await F.load();
+  const [{ data, source }] = await Promise.all([F.load(), loadPlan()]);
   try { await document.fonts.ready; } catch {}
   setMap(data, source);
   requestAnimationFrame(frame);
