@@ -201,7 +201,7 @@ function setMap(data, src, fileName){
       name: F.shortName(s.person.name) || 'Desk ' + s.desk.number, ini: F.initials(s.person.name || String(s.desk.number)),
       party: a && F.celebrating(a) ? a : null, x: 0, y: 0, state: 'out', path: null, then: null, until: 0, minReal: 0, what: '', emoji: '', with: null, room: null, phase: rand(0, 6),
       // the coffee machine nearest their desk
-      coffee: world.coffees.reduce((b, c) => { const d = world.distance(s.desk.seat.cx, s.desk.seat.cy, c.cell[0], c.cell[1]); return d < b.d ? { c, d } : b; }, { c: world.coffee, d: Infinity }).c };
+      coffee: world.coffees.reduce((b, c) => { const d = world.distance(s.desk.seat.cx, s.desk.seat.cy, c.spot[0], c.spot[1]); return d < b.d ? { c, d } : b; }, { c: world.coffee, d: Infinity }).c };
   });
   // meeting rooms: the free squares in each, the ones next to a table first
   roomAt = new Map();
@@ -222,7 +222,7 @@ function newDay(placeNow){
   for (const a of agents) {
     a.plan = { arrive: 8 * 60 + rand(-35, 70), leave: 17 * 60 + rand(-25, 85), lunch: 12 * 60 + rand(0, 70), lunchFor: rand(30, 55), lunchOut: Math.random() < 0.45 };
     a.lunched = false; a.next = a.plan.arrive + rand(15, 45);
-    a.state = 'out'; a.path = null; a.with = null; a.room = null; a.emoji = ''; a.what = 'Not in yet';
+    a.state = 'out'; a.path = null; a.with = null; a.room = null; a.after = null; a.carry = false; a.emoji = ''; a.what = 'Not in yet';
   }
   for (const r of rooms) r.mtg = null;
   renderRooms();
@@ -238,7 +238,9 @@ function newDay(placeNow){
     }
   }
 }
-function sit(a){ a.state = 'seat'; a.x = a.seat.x; a.y = a.seat.y; a.path = null; a.emoji = ''; a.what = 'At their desk'; a.with = null; }
+function sit(a){ a.state = 'seat'; a.x = a.seat.x; a.y = a.seat.y; a.path = null; a.emoji = ''; a.what = carrying(a) ? 'Having a coffee at their desk' : 'At their desk'; a.with = null; }
+// a cup in hand, from the machine until it's finished
+const carrying = a => a.carry && simMin < a.carryUntil;
 function walkTo(a, cell, then, what){
   const path = cell ? world.route(a.x, a.y, cell[0], cell[1]) : null;
   if (!path) return false;
@@ -246,8 +248,9 @@ function walkTo(a, cell, then, what){
   return true;
 }
 function goHome(a, what){ return walkTo(a, [a.seat.cx, a.seat.cy], { kind: 'seat' }, what || 'Heading back to their desk'); }
-function stay(a, cell, minutes, emoji, what, onArrive){
-  return walkTo(a, cell, { kind: 'stay', minutes, emoji, what, onArrive }, 'Walking over');
+// walk to `cell` and stay a while; `after` runs when the time's up and can send them somewhere else instead of back to their desk
+function stay(a, cell, minutes, emoji, what, onArrive, after){
+  return walkTo(a, cell, { kind: 'stay', minutes, emoji, what, onArrive, after }, carrying(a) ? 'Walking over with a coffee' : 'Walking over');
 }
 const seatedAgents = () => agents.filter(a => a.state === 'seat');
 
@@ -270,7 +273,7 @@ function think(a){
   if (!a.lunched && t >= p.lunch) {
     a.lunched = true;
     if (p.lunchOut || !a.coffee) { if (walkTo(a, world.entrance, { kind: 'out' }, 'Off to lunch')) { a.away = 'lunch'; log(`${a.name} went out for lunch`, a); } }
-    else { const c = a.coffee.cell; stay(a, freeSpot(c[0] + 0.5, c[1] + 0.5, 3), p.lunch + p.lunchFor - t, '🍽️', 'Having lunch', () => log(`${a.name} is having lunch${a.coffee.area ? ' in ' + a.coffee.area : ''}`, a)); }
+    else { const c = a.coffee; stay(a, freeSpot(c.x, c.y, 4), p.lunch + p.lunchFor - t, '🍽️', 'Having lunch', () => log(`${a.name} is having lunch${a.coffee.area ? ' in ' + a.coffee.area : ''}`, a)); }
     return;
   }
   if (t < a.next) return;
@@ -280,19 +283,8 @@ function think(a){
 function trip(a){
   let total = TRIPS.reduce((s, [, w]) => s + w, 0), r = Math.random() * total, kind = 'coffee';
   for (const [k, w] of TRIPS) { if ((r -= w) < 0) { kind = k; break; } }
-  if (kind === 'coffee' && a.coffee) {
-    const c = a.coffee.cell;
-    return stay(a, freeSpot(c[0] + 0.5, c[1] + 0.5, 2), rand(4, 10), '☕', 'Getting a coffee', () => log(`${a.name} grabbed a coffee`, a));
-  }
-  if (kind === 'chat') {
-    // someone who'll still be at their desk by the time you get there
-    const others = seatedAgents().filter(b => b !== a && !b.with && b.next - simMin > 25 && b.plan.leave - simMin > 25 && (b.lunched || b.plan.lunch - simMin > 25));
-    const b = others.length ? (Math.random() < 0.65 && others.some(o => o.team === a.team) ? pick(others.filter(o => o.team === a.team)) : pick(others)) : null;
-    const spots = b ? world.besideSeat(b.desk) : [];
-    if (b && spots.length) return stay(a, pick(spots), rand(5, 14), '💬', `Chatting with ${b.name}`, () => {
-      if (b.state !== 'seat' || b.with) { a.emoji = '🤷'; a.what = `${b.name} wasn’t there`; a.until = simMin + 1; log(`${a.name} came by, but ${b.name} was away`, a); return; }
-      b.with = a; b.emoji = '💬'; b.what = `Chatting with ${a.name}`; a.with = b; log(`${a.name} stopped by ${b.name}’s desk`, a); });
-  }
+  if (kind === 'coffee' && a.coffee && getCoffee(a)) return;
+  if (kind === 'chat' && visit(a)) return;
   if (kind === 'meeting') {
     // a free meeting room, one meeting per room; with every room taken (or none on the map) they huddle somewhere open
     const room = pick(rooms.filter(r => !r.mtg)) || null;
@@ -319,6 +311,32 @@ function trip(a){
   const views = world.windows.filter(([x, y]) => !roomAt.get(x + ',' + y)?.mtg);
   if (views.length && Math.random() < 0.7) return stay(a, pick(views), rand(2, 5), '🌤️', 'Looking out the window', () => log(`${a.name} is looking out the window`, a));
   stay(a, freeSpot(a.seat.x, a.seat.y, 6), rand(2, 4), '🚶', 'Stretching their legs', () => log(`${a.name} is stretching their legs`, a));
+}
+// Up to the machine for a minute, then off with the cup: mostly back to their desk, sometimes to a colleague's
+// desk, and now and then they stay for a chat by the machine.
+function getCoffee(a){
+  const c = a.coffee, spot = pick(c.around.filter(([x, y]) => !agents.some(o => o !== a && o.state === 'stay' && Math.floor(o.x) === x && Math.floor(o.y) === y))) || pick(c.around);
+  return stay(a, spot, rand(1, 3), '☕', 'Getting a coffee', null, () => {
+    a.carry = true; a.carryUntil = simMin + rand(15, 35);
+    const r = Math.random();
+    if (r < 0.2 && visit(a)) { log(`${a.name} took a coffee over to a colleague`, a); return true; }
+    if (r < 0.4) {
+      return stay(a, freeSpot(c.x, c.y, 3), rand(4, 10), '☕', `Having a coffee${c.area ? ' in ' + c.area : ''}`, () => log(`${a.name} is having a coffee${c.area ? ' in ' + c.area : ''}`, a));
+    }
+    if (goHome(a, 'Taking a coffee back to their desk')) { log(`${a.name} grabbed a coffee`, a); return true; }
+    return false;
+  });
+}
+// stop by someone's desk for a chat: someone who'll still be there by the time you arrive
+function visit(a){
+  const others = seatedAgents().filter(b => b !== a && !b.with && b.next - simMin > 25 && b.plan.leave - simMin > 25 && (b.lunched || b.plan.lunch - simMin > 25));
+  const b = others.length ? (Math.random() < 0.65 && others.some(o => o.team === a.team) ? pick(others.filter(o => o.team === a.team)) : pick(others)) : null;
+  const spots = b ? world.besideSeat(b.desk) : [];
+  if (!b || !spots.length) return false;
+  return stay(a, pick(spots), rand(5, 14), '💬', `Chatting with ${b.name}`, () => {
+    if (b.state !== 'seat' || b.with) { a.emoji = '🤷'; a.what = `${b.name} wasn’t there`; a.until = simMin + 1; log(`${a.name} came by, but ${b.name} was away`, a); return; }
+    b.with = a; b.emoji = '💬'; b.what = `Chatting with ${a.name}`; a.with = b; log(`${a.name} stopped by ${b.name}’s desk`, a);
+  });
 }
 // a random open square near x,y that isn't in a meeting room
 function freeSpot(x, y, r){
@@ -366,7 +384,8 @@ function update(dt){
       if (simMin >= a.until && realNow >= a.minReal) {
         if (a.with) { const b = a.with; if (b.with === a) { b.with = null; if (b.state === 'seat') { b.emoji = ''; b.what = 'At their desk'; } } a.with = null; }
         if (a.room) leaveRoom(a);
-        if (!goHome(a)) sit(a);
+        const after = a.after; a.after = null;
+        if (!(after && after()) && !goHome(a)) sit(a);
       }
     } else if (!paused) think(a);
   }
@@ -381,7 +400,7 @@ function arrive(a, realNow){
   const t = a.then || { kind: 'seat' };
   if (t.kind === 'seat') return sit(a);
   if (t.kind === 'out') { a.state = 'out'; a.what = a.away === 'lunch' ? 'Out for lunch' : 'Gone home'; return; }
-  a.state = 'stay'; a.emoji = t.emoji; a.what = t.what;
+  a.state = 'stay'; a.emoji = t.emoji; a.what = t.what; a.after = t.after || null;
   a.until = simMin + t.minutes;
   a.minReal = realNow + Math.max(3, Math.min(t.minutes / rate(), 30)) ;
   if (t.onArrive) t.onArrive();
@@ -526,9 +545,9 @@ function render(now){
 
   for (const c of world.coffees) {
     const [cx, cy] = c.cell;
-    ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.coffee; ctx.lineWidth = 0.07;
-    ctx.beginPath(); ctx.roundRect(cx + 0.1, cy + 0.1, 0.8, 0.8, 0.18); ctx.fill(); ctx.stroke();
-    ctx.font = `0.55px ${EMOJI}`; ctx.fillText('☕', cx + 0.5, cy + 0.53);
+    ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.coffee; ctx.lineWidth = 0.1;
+    ctx.beginPath(); ctx.roundRect(cx + 0.12, cy + 0.12, 1.76, 1.76, 0.3); ctx.fill(); ctx.stroke();
+    ctx.font = `1.15px ${EMOJI}`; ctx.fillText('☕', cx + 1, cy + 1.06);
   }
   const dark = darkness(simMin);
   if (dark > 0) {
@@ -558,16 +577,25 @@ function render(now){
       ctx.lineWidth = 3 / S; ctx.strokeStyle = pal.sheet; ctx.lineJoin = 'round';
       ctx.strokeText(a.name, x, y + 0.62 + 6 / S); ctx.fillStyle = followed ? pal.accent : pal.ink; ctx.fillText(a.name, x, y + 0.62 + 6 / S);
     }
-    if (a.party) { ctx.font = `0.48px ${EMOJI}`; ctx.fillText('🎈', x + 0.36, y - 0.5 + Math.sin(now * 2 + a.phase) * 0.05); }
-    if (a.emoji && (a.state === 'stay' || a.with)) {
-      if (a.emoji === '💬') {
-        // three dots that take turns
-        ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.line; ctx.lineWidth = 0.04;
-        ctx.beginPath(); ctx.roundRect(x - 0.42, y - 1.02, 0.84, 0.42, 0.18); ctx.fill(); ctx.stroke();
-        for (let k = 0; k < 3; k++) { ctx.fillStyle = pal.muted; ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(now * 5 - k * 0.9 + a.phase)); ctx.beginPath(); ctx.arc(x - 0.2 + k * 0.2, y - 0.81, 0.06, 0, 7); ctx.fill(); }
-        ctx.globalAlpha = 1;
-      } else { ctx.font = `0.48px ${EMOJI}`; ctx.fillText(a.emoji, x, y - 0.78); }
-    }
+    // a cup in hand while walking back or sitting with it
+    if (carrying(a) && a.state !== 'stay') { ctx.font = `${Math.max(0.6, 12 / S)}px ${EMOJI}`; ctx.fillText('☕', x + 0.42 + 3 / S, y + 0.12); }
+  }
+  // emojis go on top of everyone, and never smaller than about 17 pixels
+  const E = Math.max(0.85, 17 / S);
+  for (const a of agents) {
+    if (a.state === 'out') continue;
+    const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
+    if (a.party) { ctx.font = `${E * 0.85}px ${EMOJI}`; ctx.fillText('🎈', x + 0.3 + E * 0.25, y - 0.3 - E * 0.4 + Math.sin(now * 2 + a.phase) * 0.06); }
+    if (!a.emoji || !(a.state === 'stay' || a.with)) continue;
+    const top = y - 0.42 - E * 0.6;
+    if (a.emoji === '💬') {
+      // three dots that take turns
+      const w = E * 1.5, h = E * 0.8;
+      ctx.fillStyle = pal.surface; ctx.strokeStyle = pal.lineStrong; ctx.lineWidth = Math.max(0.05, 1.2 / S);
+      ctx.beginPath(); ctx.roundRect(x - w / 2, top - h / 2, w, h, h * 0.45); ctx.fill(); ctx.stroke();
+      for (let k = 0; k < 3; k++) { ctx.fillStyle = pal.muted; ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(now * 5 - k * 0.9 + a.phase)); ctx.beginPath(); ctx.arc(x + (k - 1) * w * 0.27, top, h * 0.13, 0, 7); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    } else { ctx.font = `${E}px ${EMOJI}`; ctx.fillText(a.emoji, x, top); }
   }
   for (const b of bits) { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.globalAlpha = 1 - b.t / b.life; ctx.fillStyle = b.c; ctx.fillRect(-0.08, -0.04, 0.16, 0.08); ctx.restore(); }
   ctx.globalAlpha = 1;

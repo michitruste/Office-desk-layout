@@ -308,29 +308,70 @@ function build(data){
   const openness = (x, y, r) => { let n = 0; for (let yy = y - r; yy <= y + r; yy++) for (let xx = x - r; xx <= x + r; xx++) if (free(xx, yy)) n++; return n; };
   const zoneCells = z => { const P = zonePts(z), out = []; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (indoors(x, y) && inPts(P, x + 0.5, y + 0.5)) out.push([x, y]); return out; };
   const seatCells = new Set(desks.filter(d => d.reach).map(d => idx(d.seat.cx, d.seat.cy)));
-  const roomy = (x, y) => indoors(x, y) && !seatCells.has(idx(x, y)) && [0, 1, 2, 3].every(k => open(x, y, DIRS[k][0], DIRS[k][1]));
 
-  // Coffee machines: one for about every 30 people, up to 6. Areas called something like "Kitchen" each get one;
-  // the rest go in open spots that keep everyone's walk to the nearest machine short.
-  function pickCoffees(){
-    const reach = desks.filter(d => d.reach), seatedN = reach.filter(d => d.person).length;
-    const want = Math.max(1, Math.min(6, Math.round((seatedN >= 4 ? seatedN : Math.min(reach.length, people.size)) / 30)));
-    const out = [];
-    for (const kz of zones.filter(z => COFFEE_AREA.test(z.name || ''))) {
-      const c = zoneCells(kz).filter(([x, y]) => roomy(x, y)), P = zonePts(kz);
-      const zx = P.reduce((s, p) => s + p[0], 0) / P.length, zy = P.reduce((s, p) => s + p[1], 0) / P.length;
-      if (c.length) out.push({ cell: best(c, ([x, y]) => -openness(x, y, 2) * 2 + Math.hypot(x + 0.5 - zx, y + 0.5 - zy)), area: kz.name });
+  /* Coffee machines take 2×2 squares and block them, like a counter. Each area named something like "Kitchen" gets
+     one. With no such area, one for about every 30 people (up to 6) goes in open spots that keep everyone's walk short. */
+  const doorClear = new Set();
+  // the squares a door sweeps through as it opens
+  for (const f of fixtures) if (f.kind === 'door') {
+    const g = doorGeom(f), x0 = g.horiz || g.side > 0 ? f.x1 : f.x1 - g.L, y0 = !g.horiz || g.side > 0 ? f.y1 : f.y1 - g.L;
+    for (let y = y0; y < y0 + g.L; y++) for (let x = x0; x < x0 + g.L; x++) doorClear.add(x + ',' + y);
+  }
+  const BLOCK = [[0, 0], [1, 0], [0, 1], [1, 1]];
+  // the squares round a 2×2 block, with the step from each one into the block
+  const RING = [[-1, 0, 1, 0], [-1, 1, 1, 0], [2, 0, -1, 0], [2, 1, -1, 0], [0, -1, 0, 1], [1, -1, 0, 1], [0, 2, 0, -1], [1, 2, 0, -1]];
+  const wallBetween = (x, y, dx, dy) => dx === 1 ? vWall.has((x + 1) + ',' + y) : dx === -1 ? vWall.has(x + ',' + y) : dy === 1 ? hWall.has(x + ',' + (y + 1)) : hWall.has(x + ',' + y);
+  const fits2 = (x, y) => BLOCK.every(([dx, dy]) => indoors(x + dx, y + dy) && !seatCells.has(idx(x + dx, y + dy)) && !doorClear.has((x + dx) + ',' + (y + dy)))
+    && !vWall.has((x + 1) + ',' + y) && !vWall.has((x + 1) + ',' + (y + 1)) && !hWall.has(x + ',' + (y + 1)) && !hWall.has((x + 1) + ',' + (y + 1));
+  // how many of its sides are against a wall or furniture (a machine looks right against a wall)
+  const snug = (x, y) => RING.filter(([rx, ry, dx, dy]) => !free(x + rx, y + ry) || wallBetween(x + rx, y + ry, dx, dy)).length;
+  let floorCount = 0;
+  for (let i = 0; i < N; i++) if (!block[i] && comp[i] === mainComp) floorCount++;
+  // put it down unless that would cut part of the floor off
+  function place(x, y){
+    for (const [dx, dy] of BLOCK) block[idx(x + dx, y + dy)] = 1;
+    // from a square you can reach the machine from, everything else on the floor must still be reachable
+    const start = RING.filter(([rx, ry, dx, dy]) => onFloor(x + rx, y + ry) && !wallBetween(x + rx, y + ry, dx, dy)).map(([rx, ry]) => [x + rx, y + ry])[0];
+    let reached = 0;
+    if (start) {
+      const seen = new Uint8Array(N), q = [idx(start[0], start[1])]; seen[q[0]] = 1;
+      while (q.length) {
+        const c = q.pop(), cx = c % cols, cy = (c - cx) / cols; reached++;
+        for (let k = 0; k < 4; k++) { const [dx, dy] = DIRS[k]; if (open(cx, cy, dx, dy)) { const n = idx(cx + dx, cy + dy); if (!seen[n]) { seen[n] = 1; q.push(n); } } }
+      }
     }
-    if (out.length >= want || !reach.length) return out;
-    const step = Math.ceil(reach.length / 60), seats = reach.filter((_, i) => i % step === 0).map(d => field(d.seat.cx, d.seat.cy));
+    if (start && reached === floorCount - 4) { floorCount -= 4; return true; }
+    for (const [dx, dy] of BLOCK) block[idx(x + dx, y + dy)] = 0;
+    return false;
+  }
+  function machine(x, y, area){
+    const around = RING.filter(([rx, ry, dx, dy]) => onFloor(x + rx, y + ry) && !wallBetween(x + rx, y + ry, dx, dy)).map(([rx, ry]) => [x + rx, y + ry]);
+    return { cell: [x, y], x: x + 1, y: y + 1, area, around, spot: around[0] };
+  }
+  function pickCoffees(){
+    const reach = desks.filter(d => d.reach), out = [];
+    for (const kz of zones.filter(z => COFFEE_AREA.test(z.name || ''))) {
+      const P = zonePts(kz), zx = P.reduce((s, p) => s + p[0], 0) / P.length, zy = P.reduce((s, p) => s + p[1], 0) / P.length;
+      // keep clear of the area's name, written along the top of its top-left corner
+      const tl = P.reduce((a, p) => p[1] < a[1] || p[1] === a[1] && p[0] < a[0] ? p : a, P[0]), labelEnd = tl[0] + 0.6 + String(kz.name).length * 0.36;
+      const onLabel = (x, y) => y <= tl[1] && x < labelEnd;
+      const cand = zoneCells(kz).filter(([x, y]) => fits2(x, y)).map(([x, y]) => ({ x, y, s: -snug(x, y) * 1.5 + Math.hypot(x + 1 - zx, y + 1 - zy) * 0.4 + (onLabel(x, y) ? 20 : 0) })).sort((a, b) => a.s - b.s);
+      const c = cand.slice(0, 40).find(k => place(k.x, k.y));
+      if (c) out.push(machine(c.x, c.y, kz.name));
+    }
+    if (out.length || !reach.length) return out;
+    const seatedN = reach.filter(d => d.person).length;
+    const want = Math.max(1, Math.min(6, Math.round((seatedN >= 4 ? seatedN : Math.min(reach.length, people.size)) / 30)));
+    const step = Math.ceil(reach.length / 40), seats = reach.filter((_, i) => i % step === 0).map(d => field(d.seat.cx, d.seat.cy));
     const cand = [];
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (roomy(x, y)) cand.push({ x, y, i: idx(x, y), crowd: 0.7 * (25 - openness(x, y, 2)) });
-    if (!cand.length) return out;
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (fits2(x, y)) cand.push({ x, y, i: idx(x, y), crowd: 0.7 * (25 - openness(x, y, 2)) });
     // how far each seat is from its nearest machine so far
-    const near = seats.map(f => out.reduce((m, o) => Math.min(m, f[idx(o.cell[0], o.cell[1])]), Infinity));
-    while (out.length < want) {
-      const c = best(cand, k => { let m = 0; for (let s = 0; s < seats.length; s++) m = Math.max(m, Math.min(near[s], seats[s][k.i])); return m + k.crowd; });
-      out.push({ cell: [c.x, c.y], area: null });
+    const near = seats.map(() => Infinity);
+    while (out.length < want && cand.length) {
+      const score = k => { let m = 0; for (let s = 0; s < seats.length; s++) m = Math.max(m, Math.min(near[s], seats[s][k.i])); return m + k.crowd; };
+      const c = cand.filter(k => fits2(k.x, k.y)).sort((a, b) => score(a) - score(b)).slice(0, 40).find(k => place(k.x, k.y));
+      if (!c) break;
+      out.push(machine(c.x, c.y, null));
       seats.forEach((f, s) => { near[s] = Math.min(near[s], f[c.i]); });
     }
     return out;
@@ -353,7 +394,8 @@ function build(data){
     return c.length ? best(c, ([x, y]) => Math.hypot(x - mx, (y - my) * 0.8) - (y === rows - 1 ? 4 : 0)) : null;
   }
   const coffees = pickCoffees(), coffee = coffees[0] || null;
-  const entrance = pickEntrance() || coffee?.cell || nearestFree(cols / 2, rows - 1);
+  fields.clear(); // routes worked out before the machines went down could walk through them
+  const entrance = pickEntrance() || coffee?.spot || nearestFree(cols / 2, rows - 1);
   const meetingZones = zones.filter(z => MEETING_AREA.test(z.name || ''));
   // squares to stand at and look out of a window: only windows in an outer wall, not glass between two rooms.
   // With no walls round the office there's no telling inside from out, so every window counts.
@@ -373,8 +415,9 @@ function build(data){
   const groupOf = p => colorField && p ? String(p[colorField] ?? '').trim() : '';
   const colorIndex = p => groupIdx.get(groupOf(p).toLowerCase()) ?? -1;
 
-  // who's in today: everyone with a desk. With hardly anyone assigned, the rest borrow free desks
-  const seated = desks.filter(d => d.reach && d.person).map(d => ({ person: d.person, desk: d, guest: false }));
+  // who's in today: everyone with a desk, once, at the first desk they have. With hardly anyone assigned, the rest borrow free desks
+  const counted = new Set();
+  const seated = desks.filter(d => d.reach && d.person && !counted.has(d.person) && counted.add(d.person)).map(d => ({ person: d.person, desk: d, guest: false }));
   let hotDesking = false;
   if (seated.length < 4) {
     const placed = new Set(seated.map(s => String(s.person.id)));

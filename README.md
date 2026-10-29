@@ -67,7 +67,6 @@ These can't write to files directly. The map saves in the browser instead, and t
 - **Backups:** **Data → Download backup** saves a complete copy you can load anywhere. **Export → Excel workbook** is also re-importable.
 - **Clearing the browser's site data** erases the browser copy. If a data file is linked, the file still has everything.
 - **Example people:** the 13 people in the starting data are made up. Use **Clear examples** on the yellow banner once you import your real list.
-- **Online version:** this standalone copy is separate from the map in your Claude account. To move data between them, export an Excel workbook from one and import it into the other.
 
 ## Office Life
 
@@ -82,8 +81,9 @@ These can't write to files directly. The map saves in the browser instead, and t
 It works a few things out from the map:
 
 - **Meeting rooms** are areas with *Meeting*, *Conference*, *Board*, *Huddle*, *Sala* or *Reunión* in their name. Each holds one meeting at a time, and the side panel shows which are in use. People sit around a table first if the room has desks in it. When every room is taken, people huddle somewhere open instead.
-- **Coffee machines:** one for about every 30 people, up to 6. Each area named like *Kitchen*, *Coffee*, *Café*, *Break*, *Pantry*, *Lounge*, *Cocina* or *Comedor* gets one, and the rest go in open spots that keep everyone's walk short. People use the one nearest their desk.
+- **Coffee machines** take up 2×2 squares. Every area named like *Kitchen*, *Coffee*, *Café*, *Break*, *Pantry*, *Lounge*, *Cocina* or *Comedor* gets one, against a wall where possible. With no such area, there's one for about every 30 people (up to 6), in open spots that keep everyone's walk short. People use the one nearest their desk, and usually take the cup back to their desk or to a colleague's, or stay for a chat by the machine.
 - **Windows:** people only look out of windows in an outer wall, not glass between two rooms.
 - **People come in** through the door nearest the edge of the map. When walls enclose the office, nobody wanders outside them.
 - **Colours** follow Team, the same as the map's default *Colour by*.
+- **Someone with more than one desk** shows up once, at the first of their desks.
 - **If almost nobody has a desk yet** (fewer than 4 people seated), the people without one borrow free desks here only.
