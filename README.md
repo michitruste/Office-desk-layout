@@ -94,11 +94,23 @@ Under **Emergency drills** in the side panel:
 - Zones and routes are only shown while you edit the plan, never while the office is running.
 - The plan is saved in this browser, separately from the desk map. **Export plan** saves it as `evacuation-plan.json`, and **Import plan…** loads one, for example on the wall screen's computer. When the folder is served as a website, Office Life loads `evacuation-plan.json` from next to the page by itself, as long as that browser hasn't saved a plan of its own.
 
+### Just for fun: zombie outbreak
+
+Under **Just for fun**, **🧟 Zombie outbreak** asks you to click someone to be patient zero (or **Someone random**).
+
+- **No alarm goes off.** Patient zero just looks unwell 🤢 for a few seconds, then starts shuffling after people. Everyone else carries on until they notice: seeing a zombie for a second or two, seeing or hearing someone get bitten nearby, or seeing a colleague run past. Then they run 😱.
+- **People run** for the nearest door out of the building, keeping away from zombies. They don't use the evacuation zones and routes. Once outside they disappear, and each exit counts how many got out.
+- **Safe rooms:** when a room with a door (a meeting room, the kitchen…) is a better bet than the exit, people run in there 🤫 and shut the door behind them. A zombie that hears them bangs on it 💥 until it gives: about 15 seconds for one zombie, less for several. Then everyone inside runs for it.
+- **Bites:** a zombie bites anyone within one square, if there's no wall or shut door in between. Bitten people (red ring, 😰) keep running but slower, and turn into zombies 3–6 seconds later. If they make it outside first they count as "got out, but bitten".
+- **Zombies** hunt anyone they can see or smell close by. Otherwise they wander, slowly drifting towards people, so in the end they find everyone. They don't leave the building.
+- **The end:** when nobody is left inside, or help arrives: after 3 minutes, or 20 seconds after everyone left is shut in a room. The banner shows how many got out, turned or are still inside, and the panel names patient zero and their bites. **End it** or **Back to work** cures everyone (nothing a coffee can't fix ☕), and it ends by itself 30 seconds after it's over.
+
 It works a few things out from the map:
 
 - **Meeting rooms** are areas with *Meeting*, *Conference*, *Board*, *Huddle*, *Sala* or *Reunión* in their name. Each holds one meeting at a time, and the side panel shows which are in use. People sit around a table first if the room has desks in it. When every room is taken, people huddle somewhere open instead.
 - **Coffee machines** take up 2×2 squares. Every area named like *Kitchen*, *Coffee*, *Café*, *Break*, *Pantry*, *Lounge*, *Cocina* or *Comedor* gets one, against a wall where possible. With no such area, there's one for about every 30 people (up to 6), in open spots that keep everyone's walk short. People use the one nearest their desk, and usually take the cup back to their desk or to a colleague's, or stay for a chat by the machine.
 - **Windows:** people only look out of windows in an outer wall, not glass between two rooms.
+- **Rooms** for hiding in are parts of the floor shut off from the rest by doors.
 - **People come in** through the door nearest the edge of the map. When walls enclose the office, nobody wanders outside them.
 - **Colours** follow Team, the same as the map's default *Colour by*.
 - **Someone with more than one desk** shows up once, at the first of their desks.

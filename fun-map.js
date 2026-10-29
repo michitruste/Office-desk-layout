@@ -162,8 +162,9 @@ function build(data){
     if (dy === 1) return !hWall.has(x + ',' + ny);
     return !hWall.has(x + ',' + y);
   }
-  // diagonal steps only where both ways round the corner are open, so nobody cuts through a desk corner
-  const canMove = (x, y, dx, dy) => !dx || !dy ? open(x, y, dx, dy)
+  // diagonal steps only where both ways round the corner are open, so nobody cuts through a desk corner.
+  // Once the floor is final (coffee machines down) this is swapped for a quick lookup, see below.
+  let canMove = (x, y, dx, dy) => !dx || !dy ? open(x, y, dx, dy)
     : open(x, y, dx, 0) && open(x + dx, y, 0, dy) && open(x, y, 0, dy) && open(x, y + dy, dx, 0);
 
   // connected parts of the floor
@@ -205,8 +206,8 @@ function build(data){
 
   // outdoors: what you can reach from the edge of the sheet without going through a door. With no walls
   // drawn that's everything, and then it all counts as indoors.
-  const doorEdge = new Set();
-  for (const f of fixtures) if (f.kind === 'door') for (const [o, x, y] of segEdges(f)) doorEdge.add(o + x + ',' + y);
+  const doorEdge = new Set(), doorOf = new Map();
+  fixtures.forEach((f, i) => { if (f.kind === 'door') for (const [o, x, y] of segEdges(f)) { doorEdge.add(o + x + ',' + y); doorOf.set(o + x + ',' + y, f.id ?? i); } });
   const thruDoor = (x, y, dx, dy) => doorEdge.has(dx ? 'v' + (dx > 0 ? x + 1 : x) + ',' + y : 'h' + x + ',' + (dy > 0 ? y + 1 : y));
   const outside = new Uint8Array(N), oq = [];
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if ((!x || !y || x === cols - 1 || y === rows - 1) && free(x, y)) { outside[idx(x, y)] = 1; oq.push(idx(x, y)); }
@@ -217,6 +218,32 @@ function build(data){
   let indoorCount = 0;
   for (let i = 0; i < N; i++) if (!block[i] && !outside[i] && comp[i] === mainComp) indoorCount++;
   const indoors = (x, y) => onFloor(x, y) && (!indoorCount || !outside[idx(x, y)]);
+
+  // rooms: parts of the floor shut off by doors (meeting rooms, kitchens…), each with its floor and its doors, edge by
+  // edge. The biggest part is the open office itself, so it isn't one.
+  const edgeKey = (x, y, dx, dy) => dx ? 'v' + (dx > 0 ? x + 1 : x) + ',' + y : 'h' + x + ',' + (dy > 0 ? y + 1 : y);
+  const parts = [], partAt = new Int32Array(N).fill(-1);
+  for (let s = 0; s < N; s++) {
+    const sx = s % cols, sy = (s - sx) / cols;
+    if (partAt[s] >= 0 || !indoors(sx, sy)) continue;
+    const cells = [], doors = new Map(), q = [s];
+    partAt[s] = parts.length;
+    while (q.length) {
+      const c = q.pop(), x = c % cols, y = (c - x) / cols;
+      cells.push([x, y]);
+      for (let k = 0; k < 4; k++) {
+        const [dx, dy] = DIRS[k];
+        if (!open(x, y, dx, dy)) continue;
+        const key = edgeKey(x, y, dx, dy);
+        if (doorEdge.has(key)) { const id = doorOf.get(key); if (!doors.has(id)) doors.set(id, new Set()); doors.get(id).add(key); continue; }
+        const n = idx(x + dx, y + dy);
+        if (partAt[n] < 0 && indoors(x + dx, y + dy)) { partAt[n] = parts.length; q.push(n); }
+      }
+    }
+    parts.push({ cells, doors: [...doors].map(([id, e]) => ({ id, edges: [...e] })) });
+  }
+  const biggest = parts.reduce((b, p) => p.cells.length > (b?.cells.length || 0) ? p : b, null);
+  const rooms = indoorCount ? parts.filter(p => p !== biggest && p.doors.length && p.cells.length >= 4) : [];
 
   /* routes: distance fields from a target square, kept for reuse */
   const fields = new Map();
@@ -295,11 +322,13 @@ function build(data){
     }
     return true;
   }
+  // straighten a route: from each point, the furthest of the next few it can walk to in a straight line. Looking only
+  // a few squares ahead keeps long routes quick to work out.
   function smooth(start, pts){
     const out = [];
     let a = start, i = 0;
     while (i < pts.length) {
-      let j = pts.length - 1;
+      let j = Math.min(pts.length - 1, i + 16);
       while (j > i && !straight(a, pts[j])) j--;
       out.push(pts[j]); a = pts[j]; i = j + 1;
     }
@@ -397,6 +426,12 @@ function build(data){
   }
   const coffees = pickCoffees(), coffee = coffees[0] || null;
   fields.clear(); // routes worked out before the machines went down could walk through them
+  // the floor won't change now: which of the eight steps each square allows, worked out once, so finding routes is quick
+  const moves = new Uint8Array(N);
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) DIRS.forEach(([dx, dy], k) => { if (canMove(x, y, dx, dy)) moves[idx(x, y)] |= 1 << k; });
+  const DIR_BIT = [];
+  DIRS.forEach(([dx, dy], k) => { DIR_BIT[(dy + 1) * 3 + dx + 1] = 1 << k; });
+  canMove = (x, y, dx, dy) => inside(x, y) && (moves[idx(x, y)] & DIR_BIT[(dy + 1) * 3 + dx + 1]) !== 0;
   const entrance = pickEntrance() || coffee?.spot || nearestFree(cols / 2, rows - 1);
   // the ways out: the outside square of every door in an outer wall, or just the entrance when there's none
   const exits = [];
@@ -450,7 +485,7 @@ function build(data){
   }
 
   return {
-    cols, rows, desks, zones, fixtures, people, wallRects, coffee, coffees, entrance, exits, windows, meetingZones,
+    cols, rows, desks, zones, fixtures, people, wallRects, coffee, coffees, entrance, exits, windows, meetingZones, rooms, edgeKey,
     seated, hotDesking, colorField, groupNames, groupOf, colorIndex,
     free, onFloor, indoors, canMove, wallBetween, route, smooth, distance, nearestFree, randomNear, besideSeat, zoneCells,
     isBlocked: (x, y) => !inside(x, y) || block[idx(x, y)] === 1,

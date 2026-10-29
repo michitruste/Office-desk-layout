@@ -14,7 +14,7 @@
   --danger:#b23a2e; --danger-soft:#fbe9e6; --ok:#2c7650; --ok-soft:#e2f2e9; --warn:#8a5a00; --warn-soft:#fbf1dc;
   --shadow:rgba(20,35,45,.16); --scrim:rgba(18,26,30,.45);
   --t0:#c4561c; --t1:#2c7a4e; --t2:#7a49b3; --t3:#0e7b8a; --t4:#b52f6b; --t5:#8c6a0f; --t6:#3a5fc6; --t7:#5f7322;
-  --coffee:#7a4a24; --night:#0b1a2e; --lamp:#ffd27a;
+  --coffee:#7a4a24; --night:#0b1a2e; --lamp:#ffd27a; --zombie:#6d8f57;
   --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
@@ -27,7 +27,7 @@
     --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
     --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
     --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
-    --coffee:#d7a374; --night:#02060c; --lamp:#ffcf6e;
+    --coffee:#d7a374; --night:#02060c; --lamp:#ffcf6e; --zombie:#9cc485;
     color-scheme:dark;
   }
 }
@@ -38,7 +38,7 @@
   --danger:#ee8577; --danger-soft:#3a201c; --ok:#6fcf9c; --ok-soft:#18302a; --warn:#e9b65a; --warn-soft:#33281a;
   --shadow:rgba(0,0,0,.45); --scrim:rgba(0,0,0,.6);
   --t0:#f08c52; --t1:#5fc48c; --t2:#b48ae8; --t3:#4cc2d0; --t4:#ec72a8; --t5:#d8b24b; --t6:#88a6f3; --t7:#a8bd5c;
-  --coffee:#d7a374; --night:#02060c; --lamp:#ffcf6e;
+  --coffee:#d7a374; --night:#02060c; --lamp:#ffcf6e; --zombie:#9cc485;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -195,6 +195,7 @@ canvas.dragging{cursor:grabbing}
       <section class="panel" id="annPanel"><h2>Anniversaries</h2><div id="ann"></div></section>
       <section class="panel"><h2>What’s happening</h2><ul class="log" id="log"></ul></section>
       <section class="panel" id="drillPanel"><h2>Emergency drills</h2><div id="drillBody"></div></section>
+      <section class="panel" id="funPanel"><h2>Just for fun</h2><div id="funBody"></div></section>
       <section class="panel" id="planPanel" hidden>
         <h2>Evacuation plan</h2>
         <ul class="zlist" id="zlist"></ul>
@@ -270,7 +271,7 @@ function setMap(data, src, fileName){
   events = []; bits = []; drill = null; legCache.clear(); edit.draft = edit.handle = null;
   view.follow = null; view.zoom = view.zt = 1; view.cx = world.cols / 2; view.cy = world.rows / 2;
   newDay(true);
-  layout(); renderSide(); stageClass(); renderDrill(); renderEditor();
+  layout(); renderSide(); stageClass(); renderDrill(); renderFun(); renderEditor();
 }
 // everyone's plan for the day, in minutes after midnight
 function newDay(placeNow){
@@ -439,6 +440,7 @@ function update(dt){
       }
       if (!a.path.length) arrive(a, realNow);
     } else if (drilling()) continue; // everyone's busy getting out
+    else if (a.state === 'back') { if (realNow >= a.backAt && !goHome(a, 'Back to work after the drill')) sit(a); }
     else if (a.state === 'stay') {
       if (simMin >= a.until && realNow >= a.minReal) {
         if (a.with) { const b = a.with; if (b.with === a) { b.with = null; if (b.state === 'seat') { b.emoji = ''; b.what = 'At their desk'; } } a.with = null; }
@@ -515,7 +517,7 @@ function renderSide(){
 /* ---------- drawing ---------- */
 function readPal(){
   const p = F.palette(), cs = getComputedStyle(document.documentElement);
-  for (const k of ['coffee', 'night', 'lamp']) p[k] = cs.getPropertyValue('--' + k).trim();
+  for (const k of ['coffee', 'night', 'lamp', 'zombie']) p[k] = cs.getPropertyValue('--' + k).trim();
   return p;
 }
 /* The camera. zoom 1 shows the whole office; S is pixels per square; cx,cy is the square at the middle of the view.
@@ -660,20 +662,26 @@ function render(now){
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
   drawFire(now);
+  drawDoorsShut(now);
   // while the plan is being edited, people step aside so the zones and routes are easy to see
   if (edit.on) { drawPlan(); return; }
 
   for (const a of agents) {
     if (offMap(a)) continue;
-    const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
+    const zombie = a.state === 'zombie', moving = a.state === 'walk' || a.state === 'flee' || zombie && a.moving;
+    // zombies lurch from side to side instead of bobbing
+    const bob = moving && !zombie ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x + (zombie ? Math.sin(now * 4 + a.phase) * 0.07 : 0), y = a.y - bob;
     ctx.save(); upright(a.x, a.y);
     // crouched down, taking cover, they look smaller
     const crouch = a.state === 'cover', r = crouch ? 0.27 : 0.36;
     ctx.globalAlpha = 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(a.x, a.y + 0.28, r * 0.83, 0.12, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     const followed = view.follow === a;
     if (followed) { ctx.strokeStyle = pal.accent; ctx.lineWidth = 0.09; ctx.beginPath(); ctx.arc(x, y, 0.58 + Math.sin(now * 4) * 0.04, 0, 7); ctx.stroke(); }
-    ctx.fillStyle = F.teamColor(pal, a.ci); ctx.strokeStyle = pal.sheet; ctx.lineWidth = 0.08;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+    // bitten: a red ring that pulses until they turn
+    if (a.turnAt && !zombie) { ctx.strokeStyle = pal.danger; ctx.lineWidth = 0.1; ctx.globalAlpha = 0.55 + 0.45 * Math.sin(now * 8); ctx.beginPath(); ctx.arc(x, y, 0.47, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = zombie ? pal.zombie : F.teamColor(pal, a.ci); ctx.strokeStyle = zombie ? pal.ink : pal.sheet; ctx.lineWidth = 0.08;
+    if (zombie) ctx.setLineDash([0.12, 0.1]);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
     if (S >= 18 && !crouch) { ctx.fillStyle = pal.sheet; ctx.font = '700 0.3px "Barlow", sans-serif'; ctx.fillText(a.ini, x, y + 0.01); }
     // names once you're close enough to read them, and always for the person you're following
     if (S >= 34 || followed && S >= 14) {
@@ -686,7 +694,7 @@ function render(now){
     ctx.restore();
   }
   // emojis go on top of everyone, and never smaller than about 17 pixels
-  const E = Math.max(0.85, 17 / S), EMOJI_STATES = new Set(['stay', 'cover', 'wait', 'trapped']);
+  const E = Math.max(0.85, 17 / S), EMOJI_STATES = new Set(['stay', 'cover', 'wait', 'trapped', 'zombie', 'notice', 'flee', 'hide']);
   for (const a of agents) {
     if (offMap(a)) continue;
     const bob = a.state === 'walk' ? Math.abs(Math.sin(now * 9 + a.phase)) * 0.07 : 0, x = a.x, y = a.y - bob;
@@ -711,6 +719,13 @@ function render(now){
     const out = new Map();
     for (const a of drill.people) if (a.state === 'safe' && a.evac) { const k = a.evac.exit.join(','); out.set(k, (out.get(k) || 0) + 1); }
     for (const [k, n] of out) { const [x, y] = k.split(',').map(Number); pill(x + 0.5, y + 0.5, `✓ ${n} out`, pal.ok, 1, 13); }
+    // a bite: a red ring that spreads out and fades
+    for (const b of drill.bites || []) {
+      const k = (drill.t - b.t) / 0.7;
+      if (k >= 1) continue;
+      ctx.globalAlpha = 1 - k; ctx.strokeStyle = pal.danger; ctx.lineWidth = 0.12;
+      ctx.beginPath(); ctx.arc(b.x, b.y, 0.4 + k * 1.2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    }
   }
   for (const b of bits) { ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.globalAlpha = 1 - b.t / b.life; ctx.fillStyle = b.c; ctx.fillRect(-0.08, -0.04, 0.16, 0.08); ctx.restore(); }
   ctx.globalAlpha = 1;
@@ -896,7 +911,7 @@ function renderEditor(){
   st.classList.toggle('editing', edit.on);
   st.classList.toggle('tool-zone', edit.on && edit.tool === 'zone');
   st.classList.toggle('tool-route', edit.on && edit.tool === 'route');
-  $('#planbar').hidden = !edit.on; $('#planPanel').hidden = !edit.on; $('#drillPanel').hidden = edit.on;
+  $('#planbar').hidden = !edit.on; $('#planPanel').hidden = !edit.on; $('#drillPanel').hidden = edit.on; $('#funPanel').hidden = edit.on;
   if (!edit.on) return;
   const z = zoneById(edit.zone);
   $('#planbar [data-plan="finish"]').hidden = edit.tool !== 'route';
@@ -1018,7 +1033,7 @@ function placeName([x, y]){
 }
 function pickFire(){
   if (edit.on) closeEditor();
-  if (!agents.some(a => a.state !== 'out')) return;
+  if (drilling() || !agents.some(a => a.state !== 'out')) return;
   drill = { kind: 'fire', phase: 'pick', people: new Set(), t: 0 };
   follow(null); stageClass(); renderDrill(); renderBanner();
 }
@@ -1040,6 +1055,7 @@ function startDrill(kind, fireCell){
   stageClass(); renderDrill(); renderBanner();
 }
 function drillUpdate(dt){
+  if (drill.kind === 'zombie') return zombieUpdate(dt);
   const d = drill;
   d.t += dt;
   if (d.phase === 'alert' && d.t >= ALERT_FOR) {
@@ -1070,29 +1086,32 @@ function drillUpdate(dt){
   for (const a of d.people) if (a.state === 'wait' && d.t >= a.goAt) evacuate(a);
   // over once everyone is out (and, for an earthquake, the shaking is over too)
   if (d.phase === 'evacuate' && [...d.people].every(a => a.state === 'safe' || a.state === 'trapped')) {
-    d.phase = 'done'; d.doneAt = d.lastSafe || d.t;
+    d.phase = 'done'; d.doneAt = d.lastSafe || d.t; d.overAt = d.t;
     const lost = drillCount('trapped'), n = d.people.size, early = d.kind === 'quake' && !d.caught;
     log(lost ? `${n - lost} of ${n} got out in ${mmss(d.doneAt)}. ${lost} couldn’t`
       : `Everyone is out, in ${mmss(d.doneAt)}${early ? ', before the shaking started' : ''}`);
     stageClass();
   }
   // a wall screen goes back to normal by itself
-  if (d.phase === 'done' && d.t - d.doneAt > 30) endDrill();
+  if (d.phase === 'done' && d.t - d.overAt > 30) endDrill();
 }
 function endDrill(){
   const d = drill;
   if (!d) return;
   drill = null;
+  if (d.kind === 'zombie' && d.phase !== 'pick') log('Everyone’s back to normal. Nothing a coffee can’t fix ☕');
   if (d.phase !== 'pick') {
     for (const a of d.people) {
-      a.evac = null; a.under = false; a.emoji = ''; a.then = null;
-      if (!goHome(a, 'Back to work after the drill')) sit(a);
+      if (a.state === 'out') continue; // went home or out for lunch without ever noticing
+      a.evac = null; a.under = false; a.emoji = ''; a.then = null; a.aware = false; a.turnAt = 0; a.hideIn = null; a.path = null;
+      // they head back over a few seconds rather than all at once, which also spreads out working out their way back
+      a.state = 'back'; a.backAt = performance.now() / 1000 + rand(0, 3); a.what = 'Heading back to their desk';
       a.next = simMin + rand(10, 30);
     }
-    if (d.phase !== 'done') log('Drill stopped');
+    if (d.phase !== 'done' && d.kind !== 'zombie') log('Drill stopped');
   }
   bits = bits.filter(b => !b.dust);
-  stageClass(); renderDrill(); renderBanner();
+  stageClass(); renderDrill(); renderBanner(); renderFun();
 }
 function stageClass(){
   const s = $('#stage'), d = drilling() ? drill : null;
@@ -1251,12 +1270,373 @@ function drawFire(now){
   }
 }
 
+/* ---------- zombie outbreak, just for fun ---------- */
+// Patient zero turns and nobody knows: there's no alarm. People only run once they see a zombie, see someone get
+// bitten, or see a colleague running past. They head for the nearest way out of the building, or shut themselves
+// in a room with a door when that's safer, and zombies bang on the door until it gives. Bitten people slow down and
+// turn a few seconds later. Three floor-wide maps, worked out a few times a second, steer everyone: how far each
+// square is from the nearest zombie, from the nearest person (zombies walk down it) and from safety (people do).
+const Z = { hunt: 2.4, wander: 1.1, run: 3.4, bitten: 1.9, sight: 8, smell: 12, notice: 6, reach: 1, turn: [3, 6], doorHp: 15, limit: 180, roomBias: 10, hidden: 20 };
+const at = (x, y) => y * world.cols + x;
+const cellOf = a => [Math.floor(a.x), Math.floor(a.y)];
+const onSheet = (x, y) => x >= 0 && y >= 0 && x < world.cols && y < world.rows;
+// still in the building and not a zombie (yet)
+const isPrey = a => a.state !== 'zombie' && a.state !== 'safe' && a.state !== 'out';
+/* The floor as bit masks, worked out once per outbreak so the maps stay quick on a big office: for each square,
+   which of the eight steps it allows, which of its four sides are walls (for seeing), and which steps go through
+   a door someone has shut. */
+const STEP_BIT = [];
+STEPS.forEach(([dx, dy], k) => { STEP_BIT[(dy + 1) * 3 + dx + 1] = 1 << k; });
+const bitOf = (dx, dy) => STEP_BIT[(dy + 1) * 3 + dx + 1];
+function floorMasks(){
+  const { cols, rows } = world, N = cols * rows, move = new Uint8Array(N), wall = new Uint8Array(N), inside = new Uint8Array(N), outdoor = new Uint8Array(N);
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    const i = at(x, y);
+    inside[i] = world.indoors(x, y) ? 1 : 0; outdoor[i] = world.onFloor(x, y) && !inside[i] ? 1 : 0;
+    STEPS.forEach(([dx, dy], k) => { if (world.canMove(x, y, dx, dy)) move[i] |= 1 << k; if (k < 4 && world.wallBetween(x, y, dx, dy)) wall[i] |= 1 << k; });
+  }
+  return { move, wall, inside, outdoor, shutM: new Uint8Array(N) };
+}
+const zIn = (x, y) => onSheet(x, y) && drill.inside[at(x, y)] === 1;
+const outdoorAt = (x, y) => onSheet(x, y) && drill.outdoor[at(x, y)] === 1;
+// a step through a door someone has shut
+const shutBetween = (x, y, dx, dy) => !!drill?.shutM && onSheet(x, y) && (drill.shutM[at(x, y)] & bitOf(dx, dy)) !== 0;
+// a step that can be taken: nothing in the way and no shut door
+const zCan = (x, y, dx, dy) => onSheet(x, y) && (drill.move[at(x, y)] & ~drill.shutM[at(x, y)] & bitOf(dx, dy)) !== 0;
+// a straight look from a to b: walls and shut doors are in the way, desks aren't
+function sees(ax, ay, bx, by){
+  const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 0.25), blocked = (x, y, dx, dy) => !onSheet(x, y) || ((drill.wall[at(x, y)] | drill.shutM[at(x, y)]) & bitOf(dx, dy)) !== 0;
+  let cx = Math.floor(ax), cy = Math.floor(ay);
+  for (let i = 1; i <= n; i++) {
+    const x = Math.floor(ax + (bx - ax) * i / n), y = Math.floor(ay + (by - ay) * i / n);
+    if (x === cx && y === cy) continue;
+    const dx = Math.sign(x - cx), dy = Math.sign(y - cy);
+    if (dx && dy ? (blocked(cx, cy, dx, 0) || blocked(cx + dx, cy, 0, dy)) && (blocked(cx, cy, 0, dy) || blocked(cx, cy + dy, dx, 0)) : blocked(cx, cy, dx, dy)) return false;
+    cx = x; cy = y;
+  }
+  return true;
+}
+// distances out from some squares, with the cost of each step (Infinity where it can't be taken)
+function zfield(sources, cost){
+  const dist = new Float64Array(world.cols * world.rows).fill(Infinity), heap = [], cols = world.cols;
+  for (const [c, s] of sources) if (s < dist[c]) { dist[c] = s; F.heapPush(heap, [s, c]); }
+  while (heap.length) {
+    const [dc, c] = F.heapPop(heap);
+    if (dc > dist[c]) continue;
+    const x = c % cols, y = (c - x) / cols;
+    for (const [dx, dy] of STEPS) {
+      const k = cost(x, y, dx, dy);
+      if (k === Infinity) continue;
+      const n = c + dy * cols + dx, nd = dc + k;
+      if (nd < dist[n]) { dist[n] = nd; F.heapPush(heap, [nd, n]); }
+    }
+  }
+  return dist;
+}
+const stepLen = (dx, dy) => dx && dy ? 1.4142 : 1;
+function roomName(r){
+  const [x, y] = r.cells[Math.floor(r.cells.length / 2)];
+  return world.zones.find(z => z.name && x + 0.5 >= z.x && x + 0.5 < z.x + z.w && y + 0.5 >= z.y && y + 0.5 < z.y + z.h)?.name || 'a room';
+}
+function pickZero(){
+  if (edit.on) closeEditor();
+  if (drilling() || !agents.some(a => !offMap(a))) return;
+  drill = { kind: 'zombie', phase: 'pick', people: new Set(), t: 0 };
+  follow(null); stageClass(); renderDrill(); renderBanner(); renderFun();
+}
+function startOutbreak(zero){
+  if (drilling() || !zero || offMap(zero)) return;
+  const people = agents.filter(a => !offMap(a)), cols = world.cols, roomAt = new Int32Array(cols * world.rows).fill(-1);
+  const rooms = world.rooms.map((r, i) => {
+    const cells = r.cells.map(([x, y]) => at(x, y)), edges = r.doors.flatMap(d => d.edges), doorCells = [];
+    cells.forEach(c => { roomAt[c] = i; });
+    // the squares either side of each door
+    for (const k of edges) { const [x, y] = k.slice(1).split(',').map(Number); doorCells.push(...(k[0] === 'v' ? [[x - 1, y], [x, y]] : [[x, y - 1], [x, y]])); }
+    const door = doorCells.reduce((s, [x, y]) => [s[0] + (x + 0.5) / doorCells.length, s[1] + (y + 0.5) / doorCells.length], [0, 0]);
+    return { name: roomName(r), cells, set: new Set(cells), edges, doorCells: doorCells.map(([x, y]) => at(x, y)), door, shut: false, broken: false, safe: true, hp: Z.doorHp, since: 0, bang: -9 };
+  });
+  drill = { kind: 'zombie', phase: 'run', t: 0, people: new Set(people), list: people, zero, rooms, roomAt, bites: [], nextPlan: 0, doneAt: 0, hiddenSince: 0, ...floorMasks() };
+  for (const a of people) { a.aware = false; a.turnAt = 0; a.hideIn = null; a.bitCount = 0; a.evac = null; a.chomp = 0; a.step = null; a.hunting = false; a.wary = 0; }
+  if (zero.with) { if (zero.with.with === zero) zero.with.with = null; zero.with = null; }
+  // for the first few seconds they just look unwell, and nobody pays them any attention
+  zero.state = 'zombie'; zero.emoji = '🤢'; zero.what = 'Not feeling well…'; zero.path = null; zero.aware = true; zero.chomp = 5;
+  log(`Something’s not right with ${zero.name}…`, zero);
+  zPlan(); stageClass(); renderDrill(); renderBanner(); renderFun();
+}
+// a few times a second: the maps, who has noticed, the doors, and whether it's over
+function zPlan(){
+  const d = drill, zs = d.list.filter(a => a.state === 'zombie'), prey = d.list.filter(isPrey), cell = a => at(...cellOf(a));
+  const walk = (x, y, dx, dy) => zCan(x, y, dx, dy) ? stepLen(dx, dy) : Infinity;
+  d.zdist = zfield(zs.map(z => [cell(z), 0]), walk);
+  // zombies keep indoors, and a shut door only holds them up (that's where they bang on it)
+  d.chase = zfield(prey.filter(p => !p.turnAt).map(p => [cell(p), 0]), (x, y, dx, dy) =>
+    (d.move[at(x, y)] & bitOf(dx, dy)) && d.inside[at(x, y)] && zIn(x + dx, y + dy) ? stepLen(dx, dy) + (shutBetween(x, y, dx, dy) ? 4 : 0) : Infinity);
+  // rooms: overrun if a zombie is inside, shut once people are hiding in them and it's time
+  for (const r of d.rooms) {
+    if (r.broken) { r.safe = false; continue; }
+    const zIn = zs.some(z => r.set.has(cell(z))), hiders = prey.filter(a => a.hideIn === r);
+    if (zIn && hiders.length) { openRoom(r, `A zombie is loose in ${r.name}! Everyone hiding there runs`); continue; }
+    r.safe = !r.shut && !zIn && r.cells.every(c => d.zdist[c] > 1.5);
+    if (r.shut || !hiders.length) continue;
+    const near = Math.min(...r.doorCells.map(c => d.zdist[c]));
+    const coming = prey.some(a => a.state === 'flee' && a.hideIn !== r && Math.hypot(a.x - r.door[0], a.y - r.door[1]) < 4);
+    if (near < 2.5 || near < 6 && !coming || d.t - r.since > 5 && !coming) {
+      r.shut = true; r.safe = false; r.hp = Z.doorHp; rebuildShut();
+      log(`${hiders.length === 1 ? hiders[0].name + ' shut themselves' : hiders.length + ' people shut themselves'} in ${r.name}`);
+    }
+  }
+  // people with safety to run to: an exit (straight away), or a room that's still open (a little further is fine)
+  const goals = world.exits.map(([x, y]) => [at(x, y), 0]);
+  for (const r of d.rooms) if (r.safe) for (const c of r.cells) goals.push([c, Z.roomBias]);
+  const danger = i => { const z = d.zdist[i]; return z < 1 ? 60 : z < 7 ? (7 - z) * 4 : 0; };
+  d.flee = zfield(goals, (x, y, dx, dy) => { const k = walk(x, y, dx, dy); return k === Infinity ? k : k + danger(at(x + dx, y + dy)); });
+  const unwell = d.t < 5;
+  if (!unwell && d.zero.emoji === '🤢') { d.zero.emoji = '🧟'; d.zero.what = 'Patient zero'; }
+  // who notices: someone bitten nearby or a colleague running past, straight away; a zombie shuffling about takes a
+  // second or two to make sense of
+  for (const a of prey) {
+    if (a.aware) continue;
+    const near = (b, r) => Math.hypot(b.x - a.x, b.y - a.y) < r && sees(a.x, a.y, b.x, b.y);
+    a.wary = zs.some(z => !(unwell && z === d.zero) && near(z, Z.notice)) ? a.wary + 1 : 0;
+    const why = d.bites.some(b => d.t - b.t < 2 && near(b, 7)) ? 'Saw someone get bitten!'
+      : d.bites.some(b => d.t - b.t < 1 && Math.hypot(b.x - a.x, b.y - a.y) < 10) ? 'Heard a scream'
+      : prey.some(b => b.state === 'flee' && near(b, 3)) ? 'Saw someone running and ran too'
+      : a.wary >= 5 ? 'Saw a zombie!' : '';
+    if (why) notice(a, why);
+  }
+  for (const a of prey) if (a.state === 'flee') a.path = fleePath(a);
+  // zombies hunt anyone they can see, or smell close by, or hear behind a shut door
+  for (const z of zs) {
+    z.hunting = d.chase[cell(z)] <= Z.smell || prey.some(p => !p.turnAt && Math.hypot(p.x - z.x, p.y - z.y) < Z.sight && sees(z.x, z.y, p.x, p.y))
+      || d.rooms.some(r => r.shut && Math.hypot(z.x - r.door[0], z.y - r.door[1]) < 3);
+    if (unwell && z === d.zero) z.hunting = false;
+    if (!z.hunting) z.step = null;
+  }
+  // over when nobody is left inside, or when help arrives: after a while, or once everyone left is behind a shut door
+  const allShutIn = prey.length && prey.every(a => a.hideIn?.shut && a.state === 'hide');
+  if (!allShutIn) d.hiddenSince = 0; else if (!d.hiddenSince) d.hiddenSince = d.t;
+  if (!prey.length || d.t >= Z.limit || d.hiddenSince && d.t - d.hiddenSince > Z.hidden) {
+    d.phase = 'done'; d.doneAt = d.t; d.help = prey.length > 0;
+    const r = outbreakResult();
+    log(`${d.help ? 'Help arrived' : 'It’s over'}: ${r.text}`);
+  }
+}
+function notice(a, why){
+  if (a.with) { if (a.with.with === a) { a.with.with = null; } a.with = null; }
+  a.aware = true; a.state = 'notice'; a.path = null; a.goAt = drill.t + rand(0.3, 1); a.emoji = '😱'; a.what = why;
+}
+function fleePath(a){
+  const cols = world.cols, f = drill.flee;
+  let [x, y] = cellOf(a);
+  const cells = [];
+  for (let g = 0; g < 500; g++) {
+    const i = at(x, y), r = drill.rooms[drill.roomAt[i]];
+    if (outdoorAt(x, y) || r && r.safe) break;
+    let bv = f[i], bx = -1, by = -1;
+    for (const [dx, dy] of STEPS) {
+      if (!zCan(x, y, dx, dy)) continue;
+      const v = f[i + dy * cols + dx];
+      if (v < bv) { bv = v; bx = x + dx; by = y + dy; }
+    }
+    if (bx < 0) break;
+    x = bx; y = by; cells.push({ x: x + 0.5, y: y + 0.5 });
+  }
+  // only the next stretch is smoothed: the rest is worked out again a moment later anyway
+  const head = cells.slice(0, 12), sm = world.smooth({ x: a.x, y: a.y }, head);
+  let p = { x: a.x, y: a.y };
+  for (const q of sm) { if (!sees(p.x, p.y, q.x, q.y)) return cells; p = q; }
+  return sm.concat(cells.slice(12));
+}
+function moveAlong(a, speed, dt){
+  let left = speed * dt;
+  while (left > 0 && a.path?.length) {
+    const w = a.path[0], dx = w.x - a.x, dy = w.y - a.y, d = Math.hypot(dx, dy);
+    if (d <= left) { a.x = w.x; a.y = w.y; a.path.shift(); left -= d; }
+    else { a.x += dx / d * left; a.y += dy / d * left; left = 0; }
+  }
+}
+// which steps go through a shut door: only squares by a door can take one, so only those are checked
+function rebuildShut(){
+  const d = drill, edges = new Set(d.rooms.filter(r => r.shut).flatMap(r => r.edges)), cols = world.cols;
+  const cross = (x, y, dx, dy) => edges.has(world.edgeKey(x, y, dx, dy));
+  d.shutM.fill(0);
+  if (!edges.size) return;
+  const near = new Set();
+  for (const r of d.rooms) for (const c of r.doorCells) for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) near.add(c + oy * cols + ox);
+  for (const i of near) {
+    const x = i % cols, y = (i - x) / cols;
+    if (!onSheet(x, y)) continue;
+    STEPS.forEach(([dx, dy], k) => {
+      const hit = dx && dy ? cross(x, y, dx, 0) || cross(x + dx, y, 0, dy) || cross(x, y, 0, dy) || cross(x, y + dy, dx, 0) : cross(x, y, dx, dy);
+      if (hit) d.shutM[i] |= 1 << k;
+    });
+  }
+}
+// the door gives (or is thrown open from inside): the room is no use any more and everyone in it runs
+function openRoom(r, msg){
+  r.shut = false; r.broken = true; r.safe = false; rebuildShut();
+  for (const a of drill.list) if (a.hideIn === r && isPrey(a)) { a.hideIn = null; a.state = 'flee'; a.emoji = a.turnAt ? '😰' : '😱'; a.what = 'Running for it'; a.path = fleePath(a); }
+  log(msg);
+}
+// in a room to hide in: off to the corner furthest from the door
+function hide(a, r){
+  const d = drill, taken = new Set(d.list.filter(b => b !== a && b.hideIn === r && b.spot != null).map(b => b.spot));
+  const far = c => Math.min(...r.doorCells.map(e => Math.hypot(c % world.cols - e % world.cols, Math.floor(c / world.cols) - Math.floor(e / world.cols))));
+  const spot = r.cells.filter(c => world.free(c % world.cols, Math.floor(c / world.cols)) && !taken.has(c)).sort((p, q) => far(q) - far(p))[0];
+  a.state = 'hide'; a.hideIn = r; a.spot = spot ?? null; a.emoji = a.turnAt ? '😰' : '🤫'; a.what = `Hiding in ${r.name}`;
+  a.path = spot != null ? roomPath(a, spot, r) : [];
+  if (!r.since) r.since = d.t;
+}
+// the way to a square inside a room, searched within the room only, so it's quick
+function roomPath(a, goal, r){
+  const cols = world.cols, dist = new Map([[goal, 0]]), q = [goal];
+  while (q.length) {
+    const c = q.shift(), x = c % cols, y = (c - x) / cols;
+    for (const [dx, dy] of STEPS) { const n = c + dy * cols + dx; if (r.set.has(n) && !dist.has(n) && zCan(x, y, dx, dy)) { dist.set(n, dist.get(c) + 1); q.push(n); } }
+  }
+  let [x, y] = cellOf(a);
+  const out = [];
+  for (let g = 0; g < 400 && dist.get(at(x, y)) > 0; g++) {
+    const here = dist.get(at(x, y)), next = STEPS.find(([dx, dy]) => dist.get(at(x + dx, y + dy)) === here - 1 && zCan(x, y, dx, dy));
+    if (!next) break;
+    x += next[0]; y += next[1]; out.push({ x: x + 0.5, y: y + 0.5 });
+  }
+  return out;
+}
+function zombieUpdate(dt){
+  const d = drill;
+  d.t += dt;
+  if (d.phase === 'done') { if (d.t - d.doneAt > 30) endDrill(); return; }
+  if (d.t >= d.nextPlan) { d.nextPlan = d.t + 0.3; zPlan(); if (d.phase === 'done') return; }
+  for (const a of d.list) {
+    if (a.state === 'zombie') zombieStep(a, dt);
+    else if (a.state === 'notice') { if (d.t >= a.goAt) { a.state = 'flee'; a.emoji = a.turnAt ? '😰' : ''; a.what = a.turnAt ? 'Bitten, and running anyway' : 'Running for it'; a.path = fleePath(a); } }
+    else if (a.state === 'flee') { moveAlong(a, a.turnAt ? Z.bitten : Z.run, dt); reached(a); }
+    else if (a.state === 'hide') moveAlong(a, a.turnAt ? Z.bitten : 2, dt);
+    // bitten: a few seconds later they turn, unless they made it out
+    if (a.turnAt && d.t >= a.turnAt && isPrey(a)) {
+      a.state = 'zombie'; a.emoji = '🧟'; a.what = 'A zombie now'; a.path = null; a.step = null; a.hunting = false; a.hideIn = null;
+      log(`${a.name} turned into a zombie`, a);
+    }
+  }
+  // bites: within a square, with nothing in between; zombies leave the bitten alone after
+  for (const z of d.list) {
+    if (z.state !== 'zombie' || z.chomp > d.t) continue;
+    const p = d.list.find(p => isPrey(p) && !p.turnAt && Math.hypot(p.x - z.x, p.y - z.y) <= Z.reach && sees(z.x, z.y, p.x, p.y));
+    if (!p) continue;
+    p.turnAt = d.t + rand(...Z.turn); p.aware = true; p.emoji = '😰'; z.chomp = d.t + 1.2; z.bitCount = (z.bitCount || 0) + 1;
+    if (p.state !== 'hide') { p.state = 'flee'; p.what = 'Bitten, and running anyway'; p.path = fleePath(p); }
+    d.bites.push({ x: p.x, y: p.y, t: d.t });
+    log(`${z.name} bit ${p.name}`, p);
+  }
+  d.bites = d.bites.filter(b => d.t - b.t < 3);
+}
+// out of the building, or into a room to hide
+function reached(a){
+  const [x, y] = cellOf(a), r = drill.rooms[drill.roomAt[at(x, y)]];
+  if (outdoorAt(x, y)) {
+    // counted at the exit they came out of (a wide door has several squares)
+    const exit = world.exits.length ? world.exits.reduce((b, e) => Math.hypot(e[0] - x, e[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? e : b) : [x, y];
+    a.state = 'safe'; a.evac = { exit }; a.path = null; a.emoji = ''; a.what = a.turnAt ? 'Got out, but bitten' : 'Got out of the building';
+    log(a.turnAt ? `${a.name} got out, but they’ve been bitten` : `${a.name} got out`, a);
+  } else if (r && !r.broken && (r.safe || r.shut)) hide(a, r);
+}
+function zombieStep(z, dt){
+  const d = drill, [x, y] = cellOf(z);
+  z.moving = false;
+  if (z.chomp > d.t) return; // still busy with the last one
+  if (!z.step || Math.hypot(z.step.x - z.x, z.step.y - z.y) < 0.08) {
+    z.step = null;
+    // the way to the nearest person. Hunting, they take it; otherwise they shuffle about but drift that way,
+    // drawn by the noise, so in the end they find everyone
+    let bv = d.chase[at(x, y)], bn = null;
+    for (const [dx, dy] of STEPS) {
+      if (!(d.move[at(x, y)] & bitOf(dx, dy)) || !zIn(x + dx, y + dy)) continue;
+      const v = d.chase[at(x + dx, y + dy)];
+      if (v < bv) { bv = v; bn = [dx, dy]; }
+    }
+    if (!z.hunting && Math.random() > 0.6) {
+      const ok = ([dx, dy]) => zCan(x, y, dx, dy) && zIn(x + dx, y + dy);
+      bn = z.dir && ok(z.dir) && Math.random() < 0.7 ? z.dir : pick(STEPS.filter(ok)) || null;
+    }
+    z.dir = bn;
+    if (bn && shutBetween(x, y, bn[0], bn[1])) {
+      // a shut door: bang on it until it gives
+      const r = d.rooms[d.roomAt[at(x + bn[0], y + bn[1])]] || d.rooms[d.roomAt[at(x, y)]];
+      if (r?.shut) { r.hp -= dt; r.bang = d.t; if (r.hp <= 0) openRoom(r, `The zombies broke into ${r.name}!`); }
+      return;
+    }
+    if (bn) z.step = { x: x + bn[0] + 0.5, y: y + bn[1] + 0.5 };
+    else {
+      // in the same square as someone: straight at them
+      const p = z.hunting && d.list.find(p => isPrey(p) && !p.turnAt && Math.hypot(p.x - z.x, p.y - z.y) < 1.5);
+      if (p) z.step = { x: p.x, y: p.y }; else return;
+    }
+  }
+  const dx = z.step.x - z.x, dy = z.step.y - z.y, dd = Math.hypot(dx, dy), s = Math.min(dd, (z.hunting ? Z.hunt : Z.wander) * dt);
+  if (dd > 1e-6) { z.x += dx / dd * s; z.y += dy / dd * s; z.moving = true; }
+}
+function outbreakResult(){
+  const d = drill, l = d.list;
+  const out = l.filter(a => a.state === 'safe' || a.state === 'out' && a !== d.zero).length, bittenOut = l.filter(a => a.state === 'safe' && a.turnAt).length;
+  const turned = l.filter(a => a.state === 'zombie' && a !== d.zero).length, inside = l.filter(isPrey).length;
+  const text = `${out} got out${bittenOut ? ` (${bittenOut} bitten)` : ''}, ${turned} turned${inside ? `, ${inside} still inside` : ''}`;
+  return { out, bittenOut, turned, inside, zombies: turned + 1, text };
+}
+function outbreakBanner(){
+  const d = drill;
+  if (d.phase === 'pick') return '<b>🧟 Zombie outbreak</b><span>Click someone to be patient zero</span><button class="btn small" type="button" data-drill="zero">Someone random</button><button class="btn small" type="button" data-drill="cancel">Cancel</button>';
+  const r = outbreakResult(), hiding = d.list.filter(a => a.state === 'hide').length;
+  if (d.phase === 'done') return `<b>🧟 ${d.help ? 'Help arrived' : r.out ? 'Outbreak over' : 'Nobody made it'}</b><span>${r.text} · ${mmss(d.doneAt)}</span><button class="btn small" type="button" data-drill="end">Back to work</button>`;
+  return `<b>🧟 Outbreak</b><span>${r.out} out · ${r.zombies} zombie${r.zombies > 1 ? 's' : ''}${hiding ? ` · ${hiding} hiding` : ''}</span><span class="t">${mmss(d.t)}</span><button class="btn small" type="button" data-drill="end">End</button>`;
+}
+let shownFun = null;
+function renderFun(){
+  if (!world) return;
+  const d = drill?.kind === 'zombie' ? drill : null;
+  let html;
+  if (d?.phase === 'pick') html = '<p class="m">Click someone on the map to be patient zero.</p><div class="row"><button class="btn small" type="button" data-drill="zero">Someone random</button><button class="btn small" type="button" data-drill="cancel">Cancel</button></div>';
+  else if (d) {
+    const r = outbreakResult(), names = l => l.length > 6 ? l.slice(0, 5).map(a => a.name).join(', ') + ` and ${l.length - 5} more` : l.map(a => a.name).join(', ');
+    const unaware = d.list.filter(a => isPrey(a) && !a.aware), hiding = d.rooms.filter(rm => d.list.some(a => a.hideIn === rm && isPrey(a)));
+    html = `<p class="big">${r.out} out · ${r.zombies} zombie${r.zombies > 1 ? 's' : ''}</p>`
+      + (hiding.length ? `<p class="m">Hiding: ${hiding.map(rm => `${esc(rm.name)} (${d.list.filter(a => a.hideIn === rm && isPrey(a)).length})${rm.shut ? ' 🔒' : ''}`).join(', ')}</p>` : '')
+      + (unaware.length ? `<p class="m">Haven’t noticed yet: ${esc(names(unaware))}</p>` : '')
+      + `<p class="m">Patient zero: ${esc(d.zero.name)}, ${d.zero.bitCount || 0} bite${d.zero.bitCount === 1 ? '' : 's'}</p>`
+      + `<button class="btn small" type="button" data-drill="end">${d.phase === 'done' ? 'Back to work' : 'End it'}</button>`;
+  } else {
+    const ok = !drill && agents.some(a => !offMap(a));
+    html = `<div class="drills"><button class="btn" type="button" data-drill="zombie"${ok ? '' : ' disabled'}>🧟 Zombie outbreak</button></div>`
+      + '<p class="m">One person turns and nobody notices at first. People run when they see a zombie, and shut themselves in a room with a door if they can’t get out.</p>';
+  }
+  if (html === shownFun) return;
+  shownFun = html;
+  $('#funBody').innerHTML = html;
+}
+// doors people have shut themselves behind, shaking while the zombies bang on them
+function drawDoorsShut(now){
+  if (drill?.kind !== 'zombie' || !drill.rooms) return;
+  for (const r of drill.rooms) {
+    if (!r.shut) continue;
+    const banging = drill.t - r.bang < 0.3, jx = banging ? Math.sin(now * 60) * 0.06 : 0;
+    ctx.strokeStyle = pal.warn; ctx.lineWidth = 0.26; ctx.lineCap = 'butt';
+    ctx.beginPath();
+    for (const k of r.edges) {
+      const [x, y] = k.slice(1).split(',').map(Number);
+      if (k[0] === 'v') { ctx.moveTo(x + jx, y); ctx.lineTo(x + jx, y + 1); } else { ctx.moveTo(x, y + jx); ctx.lineTo(x + 1, y + jx); }
+    }
+    ctx.stroke();
+    if (banging) { ctx.save(); upright(r.door[0], r.door[1]); ctx.font = `${Math.max(0.8, 15 / S)}px ${EMOJI}`; ctx.fillText('💥', r.door[0], r.door[1]); ctx.restore(); }
+  }
+}
+
 /* the banner on the map and the panel at the side */
 let shownBanner = null, shownDrill = null;
 function renderBanner(){
   const d = drill;
   let html = '';
-  if (d?.phase === 'pick') html = '<b>🔥 Fire drill</b><span>Click where the fire starts</span><button class="btn small" type="button" data-drill="random">Somewhere random</button><button class="btn small" type="button" data-drill="cancel">Cancel</button>';
+  if (d?.kind === 'zombie') html = outbreakBanner();
+  else if (d?.phase === 'pick') html = '<b>🔥 Fire drill</b><span>Click where the fire starts</span><button class="btn small" type="button" data-drill="random">Somewhere random</button><button class="btn small" type="button" data-drill="cancel">Cancel</button>';
   else if (d) {
     const n = d.people.size, safe = drillCount('safe'), lost = drillCount('trapped');
     const title = d.phase === 'alert' ? '🚨 Earthquake alert' : d.phase === 'shake' ? '🌍 Earthquake' : d.phase === 'done' ? (lost ? `⚠️ ${safe} of ${n} out` : '✅ Everyone is out') : d.kind === 'fire' ? '🔥 Fire drill' : '🌍 Earthquake drill';
@@ -1271,7 +1651,7 @@ function renderBanner(){
 }
 function renderDrill(){
   if (!world) return;
-  const d = drill;
+  const d = drill?.kind === 'zombie' ? null : drill;
   let html;
   if (d?.phase === 'pick') html = '<p class="m">Click the map where the fire starts.</p><div class="row"><button class="btn small" type="button" data-drill="random">Somewhere random</button><button class="btn small" type="button" data-drill="cancel">Cancel</button></div>';
   else if (d) {
@@ -1283,9 +1663,10 @@ function renderDrill(){
       + (cut ? `<p class="m" style="color:var(--danger)">Couldn’t get out: ${esc(cut)}</p>` : '')
       + `<button class="btn small" type="button" data-drill="end">${d.phase === 'done' ? 'Back to work' : 'End drill'}</button>`;
   } else {
-    const inn = agents.some(a => a.state !== 'out'), zs = plan.zones, routed = zs.filter(z => z.route.length).length;
+    // an outbreak going on keeps the drills for later
+    const inn = agents.some(a => a.state !== 'out') && !drill, zs = plan.zones, routed = zs.filter(z => z.route.length).length;
     html = `<div class="drills"><button class="btn" type="button" data-drill="quake"${inn ? '' : ' disabled'}>🌍 Earthquake</button><button class="btn" type="button" data-drill="fire"${inn ? '' : ' disabled'}>🔥 Fire</button></div>`
-      + (inn ? '' : '<p class="m">Nobody’s in right now. Try Fast day.</p>')
+      + (inn || drill ? '' : '<p class="m">Nobody’s in right now. Try Fast day.</p>')
       + `<p class="m">${zs.length ? `${zs.length} evacuation zone${zs.length > 1 ? 's' : ''}, ${routed} with a route. Anyone outside them takes the nearest exit.` : 'No evacuation plan yet, so everyone takes the nearest exit.'}${planSrc === 'site' ? ' The plan is evacuation-plan.json from this site.' : ''}</p>`
       + '<button class="btn small" type="button" data-plan="open">Edit the evacuation plan</button>';
   }
@@ -1310,6 +1691,8 @@ document.addEventListener('click', e => {
     case 'drill:fire': pickFire(); break;
     case 'drill:random': startDrill('fire', randomFireCell()); break;
     case 'drill:cancel': case 'drill:end': endDrill(); break;
+    case 'drill:zombie': pickZero(); break;
+    case 'drill:zero': startOutbreak(pick(agents.filter(a => !offMap(a)))); break;
   }
 });
 
@@ -1321,7 +1704,7 @@ function renderClock(){
     shownTime = t; $('#time').textContent = t;
     const inn = agents.filter(a => a.state !== 'out').length;
     $('#day').textContent = `${mode === 'live' ? new Date().toLocaleDateString(undefined, { weekday: 'long' }) : 'Day ' + (simDay + 1)} · ${inn} of ${agents.length} in`;
-    renderRooms(); renderDrill();
+    renderRooms(); renderDrill(); renderFun();
   }
 }
 function renderControls(){
@@ -1425,7 +1808,10 @@ function pointerEnd(e){
   if (edit.draft) { if (e.type === 'pointerup') finishDraft(); else edit.draft = null; }
   else if (edit.handle) { edit.handle = null; savePlan(); renderEditor(); }
   else if (drag && !drag.moved && e.type === 'pointerup' && edit.on) editClick(pointerWorld(e));
-  else if (drag && !drag.moved && e.type === 'pointerup' && drill?.phase === 'pick') startDrill('fire', fireCellAt(pointerWorld(e)));
+  else if (drag && !drag.moved && e.type === 'pointerup' && drill?.phase === 'pick') {
+    if (drill.kind === 'zombie') { const a = personAt(e); if (a) startOutbreak(a); }
+    else startDrill('fire', fireCellAt(pointerWorld(e)));
+  }
   else if (drag && !drag.moved && e.type === 'pointerup') {
     const a = personAt(e);
     follow(a && a !== view.follow ? a : null);
@@ -1479,7 +1865,7 @@ function frame(t){
     moveCamera(dt);
     render(t / 1000);
     renderClock(); renderFollow();
-    if (drill) { renderDrill(); renderBanner(); }
+    if (drill) { renderDrill(); renderBanner(); renderFun(); }
   }
   requestAnimationFrame(frame);
 }
